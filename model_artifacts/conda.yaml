@@ -1,9 +1,0 @@
-channels:
-- conda-forge
-dependencies:
-- python=3.11.14
-- pip<=24.0
-- pip:
-  - mlflow==3.8.1
-  - polymodel@ file://{ARTIFACT_PATH}/polymodel-1.1.2-py3-none-any.whl
-name: mlflow-env

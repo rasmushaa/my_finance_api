@@ -1,0 +1,7 @@
+uv.toml
+uv.lock
+mlruns/**
+.env
+./venv
+model_artifacts/**
+logs/**
