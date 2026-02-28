@@ -1,0 +1,2 @@
+mlflow==3.8.1
+polymodel@ file://{ARTIFACT_PATH}/polymodel-1.1.2-py3-none-any.whl
