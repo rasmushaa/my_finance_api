@@ -17,6 +17,7 @@ def load_model_artifacts():
     and saves the model metadata for reference.
     """
 
+    print(f"Loading model artifacts for {MODEL_NAME}@{MODEL_ALIAS}...")
     client = mlflow.tracking.MlflowClient()
     model_version = client.get_model_version_by_alias(MODEL_NAME, MODEL_ALIAS) # Raises INVALID_PARAMETER_VALUE if alias not found
 

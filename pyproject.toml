@@ -19,5 +19,7 @@ dependencies = [
 dev = [
     "keyring>=25.7.0",
     "keyrings-google-artifactregistry-auth>=1.1.2",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
 ]
 
