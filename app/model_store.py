@@ -2,11 +2,10 @@ import logging
 import os
 import mlflow
 from mlflow.pyfunc import PyFuncModel
-from app.schemas import CANONICAL_FEATURES
+from app.schemas.model import CANONICAL_FEATURES
 import asyncio
 from enum import Enum
 from typing import Dict, Optional
-import polymodel
 import json
 import pandas as pd
 from importlib.metadata import version
@@ -24,11 +23,29 @@ class ModelLoadingStatus(Enum):
 
 
 class ModelStore:
+    """ Singleton class to manage ML models loaded from MLflow Model Registry.
+    
+    This class handles loading the model artifacts, validating them, 
+    and providing an interface for making predictions.
+    The model is loaded asynchronously at application startup, 
+    and the store maintains the loading status.
+    """
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+    
     def __init__(self):
-        self.model: PyFuncModel | None = None
-        self.model_info: dict = {}
-        self._status: ModelLoadingStatus = ModelLoadingStatus.NOT_STARTED
-        self._error_message: Optional[str] = None
+        # Only initialize once to avoid resetting state
+        if not ModelStore._initialized:
+            self.model: PyFuncModel | None = None
+            self.model_info: dict = {}
+            self._status: ModelLoadingStatus = ModelLoadingStatus.NOT_STARTED
+            self._error_message: Optional[str] = None
+            ModelStore._initialized = True
         
     @property
     def status(self) -> ModelLoadingStatus:

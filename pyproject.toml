@@ -12,6 +12,7 @@ dependencies = [
     "ipykernel>=7.1.0",
     "polymodel==2.1.0",
     "pytest>=9.0.2",
+    "python-jose>=3.5.0",
     "uvicorn>=0.40.0",
 ]
 

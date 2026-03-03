@@ -22,6 +22,38 @@ load_env() {
 # Load environment variables
 load_env
 
+# Generate auth tokens for testing
+echo ""
+echo "=== Generated Auth Tokens ==="
+
+# Generate user token
+echo ""
+echo "User Token (role: user):"
+uv run python -c "
+import sys
+sys.path.append('.')
+from app.auth import issue_app_jwt
+user_token = issue_app_jwt('user@example.com', 'user')
+print(user_token)
+"
+
+# Generate admin token
+echo ""
+echo "Admin Token (role: admin):"
+uv run python -c "
+import sys
+sys.path.append('.')
+from app.auth import issue_app_jwt
+admin_token = issue_app_jwt('admin@example.com', 'admin')
+print(admin_token)
+"
+
+echo ""
+echo "=== Tokens generated successfully! ==="
+echo "Copy the tokens above to use in your API requests."
+echo "Add them to your request headers as: Authorization: Bearer <token>"
+echo ""
+
 # Run the FastAPI application using Uvicorn
 echo "Starting FastAPI application with Uvicorn..."
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload

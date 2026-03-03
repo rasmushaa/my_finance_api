@@ -1,44 +1,50 @@
-from fastapi import FastAPI, Depends, HTTPException
-from app.schemas import PredictRequest, PredictResponse
+from fastapi import FastAPI, Depends
+from app.auth import require_user, require_admin
 from app.model_store import ModelStore, ModelLoadingStatus
-from app.dependencies import get_model_store
 from contextlib import asynccontextmanager
 import logging
 import asyncio
 from app.setup_logging import setup_logging
+from app import schemas
 
 setup_logging(level=logging.DEBUG)
-
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------- Application Lifespan ---------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting up application...")
     
     # Start background model loading
-    store = get_model_store()
+    store = ModelStore()
     asyncio.create_task(store.load())
     
     yield
     logger.info("Shutting down application...")
 
-
-# Initialize FastAPI app with lifespan for startup/shutdown events
 app = FastAPI(title="MyFinance ML API", lifespan=lifespan)
 
 
-# Health check endpoint
+# --------------------------- Health Check Endpoint ---------------------------
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 
-# Prediction endpoint
-@app.post("/model/predict", response_model=PredictResponse)
+# ---------------------------- Model Endpoints ---------------------------
+@app.post(
+        "/model/predict", 
+        response_model=schemas.PredictResponse,
+        responses={
+            400: {"model": schemas.ErrorResponse, "description": "Bad Request - Invalid input features"},
+            503: {"model": schemas.ErrorResponse, "description": "Service Unavailable - Model not ready"}
+        }
+    )
 def predict(
-    request: PredictRequest,
-    store: ModelStore = Depends(get_model_store)
+    request: schemas.PredictRequest,
+    payload: dict = Depends(require_user),
+    store: ModelStore = Depends(ModelStore)
     ):
     # Check if model is ready before making predictions
     if not store.is_ready:
@@ -46,37 +52,58 @@ def predict(
             ModelLoadingStatus.NOT_STARTED: "Model loading has not started",
             ModelLoadingStatus.LOADING: "Models are still loading, please try again shortly",
         }
-        raise HTTPException(
-            status_code=503, 
-            detail=status_msg.get(store.status, "Models not available")
+        raise schemas.CustomHTTPException(
+            status_code=503,
+            error_code=schemas.ErrorCode.MODEL_NOT_READY,
+            message=status_msg.get(store.status, "Model is not ready for unknown reasons"),
+            details={"model_status": store.status.value}
         )
     
     df = request.to_dataframe()
     preds = store.predict(df)
-    return PredictResponse(predictions=preds)
+    return schemas.PredictResponse(predictions=preds)
 
-
-# Model metadata endpoint
-@app.get("/model/metadata")
-def get_model_metadata(
-    store: ModelStore = Depends(get_model_store)
-    ):
-    if not store.is_ready:
-        raise HTTPException(
-            status_code=503,
-            detail="Model metadata not available until model is ready"
+@app.get("/model/metadata",
+         response_model=schemas.ModelMetadataResponse,
+         responses={
+             403: {"model": schemas.ErrorResponse, "description": "Forbidden - Requires admin role"},
+             503: {"model": schemas.ErrorResponse, "description": "Service Unavailable - Model not ready"}
+             }
         )
-    return store.metadata
+def get_model_metadata(
+    payload: dict = Depends(require_admin),
+    store: ModelStore = Depends(ModelStore)
+    ):
+    # Check if model is ready before making predictions
+    if not store.is_ready:
+        status_msg = {
+            ModelLoadingStatus.NOT_STARTED: "Model loading has not started",
+            ModelLoadingStatus.LOADING: "Models are still loading, please try again shortly",
+        }
+        raise schemas.CustomHTTPException(
+            status_code=503,
+            error_code=schemas.ErrorCode.MODEL_NOT_READY,
+            message=status_msg.get(store.status, "Model is not ready for unknown reasons"),
+            details={"model_status": store.status.value}
+        )
+    return schemas.ModelMetadataResponse(**store.metadata)
 
-
-# Model status endpoint
-@app.get("/model/status")
+@app.get("/model/status", 
+         response_model=schemas.ModelStatusResponse,
+         responses={
+             403: {"model": schemas.ErrorResponse, "description": "Forbidden - Requires admin role"}
+             }
+        )
 def get_model_status(
-    store: ModelStore = Depends(get_model_store)
+    payload: dict = Depends(require_admin),
+    store: ModelStore = Depends(ModelStore)
     ):
     response = {
         "status": store.status.value,
         "is_ready": store.is_ready,
-        "error_message": store.error_message
+        "error_message": store.error_message or ""
     }  
-    return response
+    return schemas.ModelStatusResponse(**response)
+
+
+# -------------------------- Authentication Endpoints --------------------------
