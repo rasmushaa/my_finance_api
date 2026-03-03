@@ -1,7 +1,7 @@
-import mlflow
-import os
 import json
+import os
 
+import mlflow
 
 ENV = os.getenv("ENV", "dev")
 MODEL_NAME = "BankingModel"
@@ -10,23 +10,27 @@ DIST_PATH = "./model_artifacts"
 
 
 def load_model_artifacts():
-    """ Load the model artifacts for the specified model and alias from MLflow Model Registry.
-    
-    This function resolves the model version based on the provided alias, 
-    downloads the model artifacts to a local directory, 
-    and saves the model metadata for reference.
+    """Load the model artifacts for the specified model and alias from MLflow Model
+    Registry.
+
+    This function resolves the model version based on the provided alias, downloads the
+    model artifacts to a local directory, and saves the model metadata for reference.
     """
 
     print(f"Loading model artifacts for {MODEL_NAME}@{MODEL_ALIAS}...")
     client = mlflow.tracking.MlflowClient()
-    model_version = client.get_model_version_by_alias(MODEL_NAME, MODEL_ALIAS) # Raises INVALID_PARAMETER_VALUE if alias not found
+    model_version = client.get_model_version_by_alias(
+        MODEL_NAME, MODEL_ALIAS
+    )  # Raises INVALID_PARAMETER_VALUE if alias not found
 
     # Download the model artifacts for the resolved model version to a local directory
     mlflow.artifacts.download_artifacts(
         artifact_uri=model_version.source,
         dst_path=DIST_PATH,
     )
-    print(f"Downloaded {MODEL_NAME}@{MODEL_ALIAS} (v{model_version.version}) artifacts to {DIST_PATH}.")
+    print(
+        f"Downloaded {MODEL_NAME}@{MODEL_ALIAS} (v{model_version.version}) artifacts to {DIST_PATH}."
+    )
 
     # Save also the model metadata (version, run ID, tags) to a JSON file for reference
     model_metadata = {
@@ -38,7 +42,7 @@ def load_model_artifacts():
         "package_version": str(model_version.tags["package.version"]),
         "commit_sha": str(model_version.tags["commit.sha"]),
         "model_features": str(model_version.tags["model.features"]),
-        "model_architecture": str(model_version.tags["model.architecture"])
+        "model_architecture": str(model_version.tags["model.architecture"]),
     }
     metadata_path = os.path.join(DIST_PATH, "model_metadata.json")
     with open(metadata_path, "w") as f:
@@ -48,4 +52,3 @@ def load_model_artifacts():
 
 if __name__ == "__main__":
     load_model_artifacts()
-

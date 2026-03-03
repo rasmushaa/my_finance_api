@@ -9,7 +9,8 @@ def setup_logging(
     keep_last: int = 5,
     suppress_external: bool = True,
 ):
-    """Define a logging configuration that logs to both console and file with a detailed format.
+    """Define a logging configuration that logs to both console and file with a detailed
+    format.
 
     Parameters
     ----------

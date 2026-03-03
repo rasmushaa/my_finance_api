@@ -1,34 +1,40 @@
-from fastapi.testclient import TestClient
-from unittest.mock import Mock, patch
-from fastapi.testclient import TestClient
-from app.dependencies import get_model_store
-from app.main import app
-from app.auth import require_user, require_role, require_admin
-from app.model_store import ModelLoadingStatus
-from app.model_store import ModelStore
-from app import schemas
+from unittest.mock import patch
+
 import pytest
+from fastapi.testclient import TestClient
+
+from app import schemas
+from app.auth import require_admin, require_user
+from app.main import app
+from app.model_store import ModelLoadingStatus, ModelStore
 
 
 # --------------- Mock Model Store and Dummy Model for Testing ----------------
 class DummyModel:
     def predict(self, df):
-        return ['class_a'] * len(df)
+        return ["class_a"] * len(df)
+
 
 class DummyStore:
-    def __init__(self, is_ready=True, status=ModelLoadingStatus.READY, error_message=None):
+    def __init__(
+        self, is_ready=True, status=ModelLoadingStatus.READY, error_message=None
+    ):
         self._model = DummyModel() if is_ready else None
-        self._model_info = {
-            "model_name": "test_model",
-            "alias": "test_alias", 
-            "version": 1,
-            "run_id": "test_run_123",
-            "description": "Test model for unit tests",
-            "package_version": "1.0.0",
-            "commit_sha": "abc123def456",
-            "model_features": "a,b,c",
-            "model_architecture": "RandomForest"
-        } if is_ready else {}
+        self._model_info = (
+            {
+                "model_name": "test_model",
+                "alias": "test_alias",
+                "version": 1,
+                "run_id": "test_run_123",
+                "description": "Test model for unit tests",
+                "package_version": "1.0.0",
+                "commit_sha": "abc123def456",
+                "model_features": "a,b,c",
+                "model_architecture": "RandomForest",
+            }
+            if is_ready
+            else {}
+        )
         self._status = status
         self._error_message = error_message
 
@@ -36,39 +42,45 @@ class DummyStore:
         if not self.is_ready:
             raise ValueError("Model is not ready, prediction cannot be made")
         return self._model.predict(input_df)
-    
+
     @property
     def metadata(self):
         if not self.is_ready:
             raise ValueError("Model is not ready, metadata not available")
         return self._model_info
-        
+
     @property
     def is_ready(self):
         return self._status == ModelLoadingStatus.READY
-        
+
     @property
     def status(self):
         return self._status
-        
+
     @property
     def error_message(self):
         return self._error_message
-    
+
+
 # ------------------ Mock Dependency Overrides for Authentication and Model Store ------------------
 def override_store():
     return DummyStore()
 
+
 def override_store_not_ready():
     return DummyStore(is_ready=False, status=ModelLoadingStatus.LOADING)
+
 
 def mock_require_user():
     return {"user_id": "test_user", "username": "testuser"}
 
+
 def mock_require_role():
     def _mock_role():
         return {"user_id": "test_admin", "role": "admin"}
+
     return _mock_role
+
 
 @pytest.fixture(autouse=True)
 def cleanup_overrides():
@@ -81,8 +93,11 @@ def cleanup_overrides():
 def test_health_check():
     # Override auth dependencies
     app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {"user_id": "admin", "role": "admin"}
-    
+    app.dependency_overrides[require_admin] = lambda: {
+        "user_id": "admin",
+        "role": "admin",
+    }
+
     client = TestClient(app)
     response = client.get("/health")
     assert response.status_code == 200
@@ -94,19 +109,17 @@ def test_health_check():
 def test_predict_endpoint():
     # Override auth and model dependencies
     app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {"user_id": "admin", "role": "admin"}
-    app.dependency_overrides[ModelStore] = override_store
-    
-    client = TestClient(app)
-    request_payload = {
-        "inputs": {
-            "a": [1.0, 3.0],
-            "b": [2.0, 4.0]
-        }
+    app.dependency_overrides[require_admin] = lambda: {
+        "user_id": "admin",
+        "role": "admin",
     }
+    app.dependency_overrides[ModelStore] = override_store
+
+    client = TestClient(app)
+    request_payload = {"inputs": {"a": [1.0, 3.0], "b": [2.0, 4.0]}}
     response = client.post("/model/predict", json=request_payload)
     assert response.status_code == 200
-    assert response.json() == {"predictions": ['class_a', 'class_a']}
+    assert response.json() == {"predictions": ["class_a", "class_a"]}
 
 
 # Test predict endpoint with models not ready
@@ -114,16 +127,14 @@ def test_predict_endpoint():
 def test_predict_endpoint_model_not_ready():
     # Override auth and model dependencies
     app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {"user_id": "admin", "role": "admin"}
-    app.dependency_overrides[ModelStore] = override_store_not_ready
-    
-    client = TestClient(app)
-    request_payload = {
-        "inputs": {
-            "a": [1.0, 3.0],
-            "b": [2.0, 4.0]
-        }
+    app.dependency_overrides[require_admin] = lambda: {
+        "user_id": "admin",
+        "role": "admin",
     }
+    app.dependency_overrides[ModelStore] = override_store_not_ready
+
+    client = TestClient(app)
+    request_payload = {"inputs": {"a": [1.0, 3.0], "b": [2.0, 4.0]}}
     response = client.post("/model/predict", json=request_payload)
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == schemas.ErrorCode.MODEL_NOT_READY.value
@@ -134,9 +145,12 @@ def test_predict_endpoint_model_not_ready():
 def test_predict_endpoint_missing_feature():
     # Override auth and model dependencies
     app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {"user_id": "admin", "role": "admin"}
+    app.dependency_overrides[require_admin] = lambda: {
+        "user_id": "admin",
+        "role": "admin",
+    }
     app.dependency_overrides[ModelStore] = override_store
-    
+
     client = TestClient(app)
     request_payload = {
         "inputs": {
@@ -154,15 +168,18 @@ def test_predict_endpoint_missing_feature():
 def test_predict_endpoint_extra_feature():
     # Override auth and model dependencies
     app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {"user_id": "admin", "role": "admin"}
+    app.dependency_overrides[require_admin] = lambda: {
+        "user_id": "admin",
+        "role": "admin",
+    }
     app.dependency_overrides[ModelStore] = override_store
-    
+
     client = TestClient(app)
     request_payload = {
         "inputs": {
             "a": [1.0, 3.0],
             "b": [2.0, 4.0],
-            "c": [5.0, 6.0]  # Extra feature 'c'
+            "c": [5.0, 6.0],  # Extra feature 'c'
         }
     }
     response = client.post("/model/predict", json=request_payload)
@@ -174,9 +191,12 @@ def test_predict_endpoint_extra_feature():
 def test_model_info_endpoint_not_ready():
     # Override auth and model dependencies
     app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {"user_id": "admin", "role": "admin"}
+    app.dependency_overrides[require_admin] = lambda: {
+        "user_id": "admin",
+        "role": "admin",
+    }
     app.dependency_overrides[ModelStore] = override_store_not_ready
-    
+
     client = TestClient(app)
     response = client.get("/model/metadata")
     assert response.status_code == 503
@@ -187,9 +207,12 @@ def test_model_info_endpoint_not_ready():
 def test_model_info_endpoint():
     # Override auth and model dependencies
     app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {"user_id": "admin", "role": "admin"}
+    app.dependency_overrides[require_admin] = lambda: {
+        "user_id": "admin",
+        "role": "admin",
+    }
     app.dependency_overrides[ModelStore] = override_store
-    
+
     client = TestClient(app)
     response = client.get("/model/metadata")
     assert response.status_code == 200
@@ -201,9 +224,12 @@ def test_model_info_endpoint():
 def test_model_status_endpoint_ready():
     # Override auth and model dependencies
     app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {"user_id": "admin", "role": "admin"}
+    app.dependency_overrides[require_admin] = lambda: {
+        "user_id": "admin",
+        "role": "admin",
+    }
     app.dependency_overrides[ModelStore] = override_store
-    
+
     client = TestClient(app)
     response = client.get("/model/status")
     assert response.status_code == 200
@@ -216,9 +242,12 @@ def test_model_status_endpoint_ready():
 def test_model_status_endpoint_loading():
     # Override auth and model dependencies
     app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {"user_id": "admin", "role": "admin"}
+    app.dependency_overrides[require_admin] = lambda: {
+        "user_id": "admin",
+        "role": "admin",
+    }
     app.dependency_overrides[ModelStore] = override_store_not_ready
-    
+
     client = TestClient(app)
     response = client.get("/model/status")
     assert response.status_code == 200

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script loads the model artifacts for the specified model name 
+# This script loads the model artifacts for the specified model name
 # and alias from MLflow Model Registry, and saves them to a local directory,
 # used for local development and testing. It also saves the model metadata for reference.
 # The actual load_model_artifacts.py runs in CI/CD pipeline, but this script can be used locally to load the same artifacts.
