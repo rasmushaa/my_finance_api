@@ -1,4 +1,4 @@
-"""Testes for the ModelStore class in app.model_store module."""
+"""Tests for the ModelStore class in app.services.model_store module."""
 
 from unittest.mock import mock_open, patch
 
@@ -6,10 +6,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app.model_store import ModelLoadingStatus, ModelStore
+from app.services.container import container, get_model_store
+from app.services.model_store import ModelLoadingStatus, ModelStore
 
 
-# Mock the whole loaded mlflow.pyfunc module
+# --------------------------- Mock Classes for MlFlow --------------------------
 class MockInput:
     def __init__(self, name: str):
         self.name = name
@@ -33,19 +34,18 @@ class MockModel:
         return np.array([0] * len(df))
 
 
+# --------------------------- Test Cases for ModelStore --------------------------
 def test_initialize_model_store():
     """Smoke test to verify that ModelStore initializes with correct default values."""
     store = ModelStore()
     assert store.status == ModelLoadingStatus.NOT_STARTED
     assert not store.is_ready
-    assert store.model is None
-    assert store.model_info == {}
 
 
-@patch("app.model_store.CANONICAL_FEATURES", ["a", "b"])
-@patch("app.model_store.mlflow.pyfunc.load_model")
-@patch("app.model_store.ModelStore._load_model_metadata")
-@patch("app.model_store.ModelStore._validate_model_package_version")
+@patch("app.services.model_store.CANONICAL_FEATURES", ["a", "b"])
+@patch("app.services.model_store.mlflow.pyfunc.load_model")
+@patch("app.services.model_store.ModelStore._load_model_metadata")
+@patch("app.services.model_store.ModelStore._validate_model_package_version")
 @pytest.mark.asyncio
 async def test_load_model(
     mock_validate_package, mock_load_model_metadata, mock_load_model
@@ -72,10 +72,10 @@ async def test_load_model(
     ]  # MockModel returns [0] for any input
 
 
-@patch("app.model_store.CANONICAL_FEATURES", ["a", "b"])
-@patch("app.model_store.ModelStore._validate_model_package_version")
-@patch("app.model_store.ModelStore._load_model_metadata")
-@patch("app.model_store.mlflow.pyfunc.load_model")
+@patch("app.services.model_store.CANONICAL_FEATURES", ["a", "b"])
+@patch("app.services.model_store.ModelStore._validate_model_package_version")
+@patch("app.services.model_store.ModelStore._load_model_metadata")
+@patch("app.services.model_store.mlflow.pyfunc.load_model")
 @pytest.mark.asyncio
 async def test_load_model_signature_failure(
     mock_load_model, mock_load_metadata, mock_validate_package
@@ -93,8 +93,8 @@ async def test_load_model_signature_failure(
 
 
 # Tests for _validate_model_package_version method
-@patch("app.model_store.version")
-@patch("app.model_store.os.path.exists")
+@patch("app.services.model_store.version")
+@patch("app.services.model_store.os.path.exists")
 def test_validate_model_package_version_success(mock_exists, mock_version):
     """Test successful validation when polymodel versions match."""
     # Mock requirements.txt exists
@@ -111,8 +111,8 @@ def test_validate_model_package_version_success(mock_exists, mock_version):
         store._validate_model_package_version()
 
 
-@patch("app.model_store.version")
-@patch("app.model_store.os.path.exists")
+@patch("app.services.model_store.version")
+@patch("app.services.model_store.os.path.exists")
 def test_validate_model_package_version_mismatch(mock_exists, mock_version):
     """Test validation fails when polymodel versions don't match."""
     mock_exists.return_value = True
@@ -130,8 +130,8 @@ def test_validate_model_package_version_mismatch(mock_exists, mock_version):
             store._validate_model_package_version()
 
 
-@patch("app.model_store.version")
-@patch("app.model_store.os.path.exists")
+@patch("app.services.model_store.version")
+@patch("app.services.model_store.os.path.exists")
 def test_validate_model_package_version_runtime_error(mock_exists, mock_version):
     """Test validation fails when runtime version cannot be determined."""
     mock_exists.return_value = True
@@ -145,3 +145,20 @@ def test_validate_model_package_version_runtime_error(mock_exists, mock_version)
             ValueError, match="Could not determine runtime polymodel version"
         ):
             store._validate_model_package_version()
+
+
+# ----------------------- DI Container Integration Tests -----------------------
+def test_model_store_container_integration():
+    """Test that ModelStore can be resolved from DI container."""
+    # Clear existing singleton to ensure clean state
+    if "model_store" in container._Container__singletons:
+        del container._Container__singletons["model_store"]
+
+    # Get ModelStore from container
+    store1 = get_model_store()
+    store2 = get_model_store()
+
+    # Should be the same instance (singleton)
+    assert store1 is store2
+    assert isinstance(store1, ModelStore)
+    assert store1.status == ModelLoadingStatus.NOT_STARTED

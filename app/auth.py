@@ -120,3 +120,4 @@ def require_role(role: str):
 
 # --------------- Dependency instances for endpoints ---------------
 require_admin = require_role("admin")
+require_login = require_user

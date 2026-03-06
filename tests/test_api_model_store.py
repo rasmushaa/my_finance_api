@@ -6,7 +6,8 @@ from fastapi.testclient import TestClient
 from app import schemas
 from app.auth import require_admin, require_user
 from app.main import app
-from app.model_store import ModelLoadingStatus, ModelStore
+from app.services.container import get_model_store
+from app.services.model_store import ModelLoadingStatus
 
 
 # --------------- Mock Model Store and Dummy Model for Testing ----------------
@@ -109,11 +110,7 @@ def test_health_check():
 def test_predict_endpoint():
     # Override auth and model dependencies
     app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {
-        "user_id": "admin",
-        "role": "admin",
-    }
-    app.dependency_overrides[ModelStore] = override_store
+    app.dependency_overrides[get_model_store] = override_store
 
     client = TestClient(app)
     request_payload = {"inputs": {"a": [1.0, 3.0], "b": [2.0, 4.0]}}
@@ -131,7 +128,7 @@ def test_predict_endpoint_model_not_ready():
         "user_id": "admin",
         "role": "admin",
     }
-    app.dependency_overrides[ModelStore] = override_store_not_ready
+    app.dependency_overrides[get_model_store] = override_store_not_ready
 
     client = TestClient(app)
     request_payload = {"inputs": {"a": [1.0, 3.0], "b": [2.0, 4.0]}}
@@ -149,7 +146,7 @@ def test_predict_endpoint_missing_feature():
         "user_id": "admin",
         "role": "admin",
     }
-    app.dependency_overrides[ModelStore] = override_store
+    app.dependency_overrides[get_model_store] = override_store
 
     client = TestClient(app)
     request_payload = {
@@ -172,7 +169,7 @@ def test_predict_endpoint_extra_feature():
         "user_id": "admin",
         "role": "admin",
     }
-    app.dependency_overrides[ModelStore] = override_store
+    app.dependency_overrides[get_model_store] = override_store
 
     client = TestClient(app)
     request_payload = {
@@ -195,7 +192,7 @@ def test_model_info_endpoint_not_ready():
         "user_id": "admin",
         "role": "admin",
     }
-    app.dependency_overrides[ModelStore] = override_store_not_ready
+    app.dependency_overrides[get_model_store] = override_store_not_ready
 
     client = TestClient(app)
     response = client.get("/model/metadata")
@@ -211,7 +208,7 @@ def test_model_info_endpoint():
         "user_id": "admin",
         "role": "admin",
     }
-    app.dependency_overrides[ModelStore] = override_store
+    app.dependency_overrides[get_model_store] = override_store
 
     client = TestClient(app)
     response = client.get("/model/metadata")
@@ -228,7 +225,7 @@ def test_model_status_endpoint_ready():
         "user_id": "admin",
         "role": "admin",
     }
-    app.dependency_overrides[ModelStore] = override_store
+    app.dependency_overrides[get_model_store] = override_store
 
     client = TestClient(app)
     response = client.get("/model/status")
@@ -246,7 +243,7 @@ def test_model_status_endpoint_loading():
         "user_id": "admin",
         "role": "admin",
     }
-    app.dependency_overrides[ModelStore] = override_store_not_ready
+    app.dependency_overrides[get_model_store] = override_store_not_ready
 
     client = TestClient(app)
     response = client.get("/model/status")

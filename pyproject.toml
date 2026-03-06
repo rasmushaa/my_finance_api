@@ -10,6 +10,7 @@ dependencies = [
     "google-cloud-storage>=3.7.0",
     "httpx>=0.28.1",
     "ipykernel>=7.1.0",
+    "pandas-gbq>=0.33.0",
     "polymodel==2.1.0",
     "pre-commit>=4.5.1",
     "pytest>=9.0.2",
@@ -19,6 +20,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "duckdb>=1.0.0",
     "keyring>=25.7.0",
     "keyrings-google-artifactregistry-auth>=1.1.2",
     "pytest>=9.0.2",

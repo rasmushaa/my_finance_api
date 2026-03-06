@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 MODEL_ARTIFACTS_PATH = (
-    "model_artifacts"  # The artifacts are embedded in the container image
+    "./model_artifacts"  # The artifacts are embedded in the container image
 )
 
 
@@ -27,41 +27,30 @@ class ModelLoadingStatus(Enum):
 
 
 class ModelStore:
-    """Singleton class to manage ML models loaded from MLflow Model Registry.
+    """Class to manage local MlFlow models.
 
     This class handles loading the model artifacts, validating them, and providing an
     interface for making predictions. The model is loaded asynchronously at application
     startup, and the store maintains the loading status.
     """
 
-    _instance = None
-    _initialized = False
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
     def __init__(self):
-        # Only initialize once to avoid resetting state
-        if not ModelStore._initialized:
-            self.model: PyFuncModel | None = None
-            self.model_info: dict = {}
-            self._status: ModelLoadingStatus = ModelLoadingStatus.NOT_STARTED
-            self._error_message: Optional[str] = None
-            ModelStore._initialized = True
+        self.__model: PyFuncModel | None = None
+        self.__model_info: dict = {}
+        self.__status: ModelLoadingStatus = ModelLoadingStatus.NOT_STARTED
+        self.__error_message: Optional[str] = None
 
     @property
     def status(self) -> ModelLoadingStatus:
-        return self._status
+        return self.__status
 
     @property
     def is_ready(self) -> bool:
-        return self._status == ModelLoadingStatus.READY
+        return self.__status == ModelLoadingStatus.READY
 
     @property
     def error_message(self) -> Optional[str]:
-        return self._error_message
+        return self.__error_message
 
     @property
     def metadata(self) -> Dict[str, str]:
@@ -74,7 +63,7 @@ class ModelStore:
         """
         if not self.is_ready:
             raise ValueError("Model is not ready, metadata not available")
-        return self._model_info
+        return self.__model_info
 
     def predict(self, input_df: pd.DataFrame) -> list:
         """Make predictions using the loaded model.
@@ -94,9 +83,9 @@ class ModelStore:
         """
         if not self.is_ready:
             raise ValueError("Model is not ready, prediction cannot be made")
-        model_features = [f.name for f in self._model.metadata.signature.inputs]
+        model_features = [f.name for f in self.__model.metadata.signature.inputs]
         used_data = input_df[model_features]
-        return self._model.predict(used_data).tolist()
+        return self.__model.predict(used_data).tolist()
 
     async def load(self) -> None:
         """Async load models from MLflow Model Registry into the store.
@@ -106,11 +95,10 @@ class ModelStore:
         the API cannot function without a model.
         """
 
-        self._status = ModelLoadingStatus.LOADING
-        logger.info(f"Starting async model loading...")
+        self.__status = ModelLoadingStatus.LOADING
         await asyncio.to_thread(self._load_model_artifacts)
-        self._status = ModelLoadingStatus.READY
-        logger.info(f"Successfully loaded models")
+        self.__status = ModelLoadingStatus.READY
+        logger.info(f"Successfully loaded model info: {self.__model_info}")
 
     def _load_model_artifacts(self) -> None:
         """Load a model from MLflow Model Registry and validate its features.
@@ -119,8 +107,8 @@ class ModelStore:
         event loop.
         """
         self._validate_model_package_version()
-        self._model = mlflow.pyfunc.load_model(model_uri=MODEL_ARTIFACTS_PATH)
-        self._model_info = self._load_model_metadata()
+        self.__model = mlflow.pyfunc.load_model(model_uri=MODEL_ARTIFACTS_PATH)
+        self.__model_info = self._load_model_metadata()
         self._validate_model_features()
 
     def _load_model_metadata(self) -> dict:
@@ -184,12 +172,12 @@ class ModelStore:
         ValueError
             If model does not have input schema or required features are missing.
         """
-        model_signature = self._model.metadata.signature
+        model_signature = self.__model.metadata.signature
 
         if model_signature is None:
             raise ValueError(f"Model does not have an input schema defined.")
 
-        model_features = {f.name for f in self._model.metadata.signature.inputs}
+        model_features = {f.name for f in self.__model.metadata.signature.inputs}
         available_features_set = set(CANONICAL_FEATURES)
         missing_features = model_features - available_features_set
 

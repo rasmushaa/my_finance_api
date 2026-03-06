@@ -5,8 +5,15 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 
 from app import schemas
-from app.auth import require_admin, require_user
-from app.model_store import ModelLoadingStatus, ModelStore
+from app.auth import require_admin, require_login
+from app.services.categories import CategoriesService
+from app.services.container import (
+    get_categories_service,
+    get_model_store,
+    get_services_requiring_shutdown,
+    get_services_requiring_startup,
+)
+from app.services.model_store import ModelLoadingStatus, ModelStore
 from app.setup_logging import setup_logging
 
 setup_logging(level=logging.DEBUG)
@@ -18,12 +25,26 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Starting up application...")
 
-    # Start background model loading
-    store = ModelStore()
-    asyncio.create_task(store.load())
+    # Get services that need startup tasks from container
+    startup_services = get_services_requiring_startup()
+
+    # Start background tasks for each service
+    tasks = []
+    for service in startup_services:
+        if hasattr(service, "load"):  # Protocol check for load method
+            task = asyncio.create_task(service.load())
+            tasks.append(task)
+            logger.info(f"Started background task for {service.__class__.__name__}")
 
     yield
+
+    # Cleanup on shutdown
     logger.info("Shutting down application...")
+    shutdown_services = get_services_requiring_shutdown()
+    for shutdown_service in shutdown_services:
+        if hasattr(shutdown_service, "cleanup"):
+            await shutdown_service.cleanup()
+            logger.info(f"Cleaned up {shutdown_service.__class__.__name__}")
 
 
 app = FastAPI(title="MyFinance ML API", lifespan=lifespan)
@@ -52,8 +73,8 @@ def health():
 )
 def predict(
     request: schemas.PredictRequest,
-    payload: dict = Depends(require_user),
-    store: ModelStore = Depends(ModelStore),
+    payload: dict = Depends(require_login),
+    store: ModelStore = Depends(get_model_store),
 ):
     # Check if model is ready before making predictions
     if not store.is_ready:
@@ -90,7 +111,7 @@ def predict(
     },
 )
 def get_model_metadata(
-    payload: dict = Depends(require_admin), store: ModelStore = Depends(ModelStore)
+    payload: dict = Depends(require_admin), store: ModelStore = Depends(get_model_store)
 ):
     # Check if model is ready before making predictions
     if not store.is_ready:
@@ -120,7 +141,7 @@ def get_model_metadata(
     },
 )
 def get_model_status(
-    payload: dict = Depends(require_admin), store: ModelStore = Depends(ModelStore)
+    payload: dict = Depends(require_login), store: ModelStore = Depends(get_model_store)
 ):
     response = {
         "status": store.status.value,
@@ -130,4 +151,20 @@ def get_model_status(
     return schemas.ModelStatusResponse(**response)
 
 
-# -------------------------- Authentication Endpoints --------------------------
+# -------------------------- Data Endpoints --------------------------
+@app.get("/data/categories/expenditure", response_model=schemas.CategoriesResponse)
+def get_expenditure_categories(
+    payload: dict = Depends(require_login),
+    categories_service: CategoriesService = Depends(get_categories_service),
+):
+    categories_list = categories_service.get_expenditure_categories()
+    return schemas.CategoriesResponse(categories=categories_list)
+
+
+@app.get("/data/categories/asset", response_model=schemas.CategoriesResponse)
+def get_asset_categories(
+    payload: dict = Depends(require_login),
+    categories_service: CategoriesService = Depends(get_categories_service),
+):
+    categories_list = categories_service.get_asset_categories()
+    return schemas.CategoriesResponse(categories=categories_list)
