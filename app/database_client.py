@@ -3,7 +3,6 @@ import os
 
 import pandas as pd
 import pandas_gbq
-from google.cloud import storage
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +25,6 @@ class GoogleCloudAPI:
         self.__project_id = os.getenv("GCP_PROJECT_ID")
         self.__dataset = os.getenv("GCP_BQ_DATASET") + "_" + os.getenv("ENV", "dev")
         self.__location = os.getenv("GCP_LOCATION")
-        self.__bucket_name = os.getenv("GCP_CGS_BUCKET")
-        self.__bucket_dir = os.getenv("GCP_CGS_BUCKET_DIR")
 
     @property
     def dataset(self) -> str:
@@ -101,44 +98,4 @@ class GoogleCloudAPI:
         )  # Use default the system default credentials/Cloud Run SA
         logger.debug(
             f"Pushed DataFrame to BigQuery table {self.__dataset}.{table_name} with schema:\n{table_schema}"
-        )
-
-    def upload_file_to_gcs(self, local_file_path: str):
-        """Upload Local File to GCS.
-
-        The file is read from the local filesystem and
-        uploaded to GCS with the same directory structure.
-
-        Inputs
-        ------
-        local_file_path : str
-            Name/Dir of the file to be uploaded with the same dir
-        """
-        gcs_path = os.path.join(self.__bucket_dir, local_file_path)
-
-        client = storage.Client()  # Use the default Account/Cloud Run SA
-        bucket = client.get_bucket(self.__bucket_name)
-        blob = bucket.blob(gcs_path)
-        blob.upload_from_filename(local_file_path)
-        logger.debug(f"Uploaded local file {local_file_path} to GCS at {gcs_path}")
-
-    def download_file_from_gcs(self, local_file_path: str):
-        """Download a file from GCS to local filesystem.
-
-        The file will have the same directory structure
-        in GCS and local filesystem.
-
-        Inputs
-        ------
-        local_file_path : str
-            Name/Dir of the file to be downloaded from and saved to the same dir
-        """
-        gcs_path = os.path.join(self.__bucket_dir, local_file_path)
-
-        client = storage.Client()  # Use default Account/Cloud Run SA
-        bucket = client.get_bucket(self.__bucket_name)
-        blob = bucket.blob(gcs_path)
-        blob.download_to_filename(local_file_path)
-        logger.debug(
-            f"Downloaded file from GCS at {gcs_path} to local file {local_file_path}"
         )

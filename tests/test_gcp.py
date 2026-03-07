@@ -5,7 +5,7 @@ test actual GCP integration.
 """
 
 import os
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -128,75 +128,3 @@ def test_write_pandas_to_table_with_mixed_columns(mock_to_gbq):
     assert kwargs["project_id"] == "test-project"
     assert kwargs["location"] == "US"
     assert kwargs["if_exists"] == "append"
-
-
-@patch("google.cloud.storage.Client")
-@patch.dict(
-    os.environ,
-    {
-        "GCP_PROJECT_ID": "test-project",
-        "GCP_BQ_DATASET": "test_dataset",
-        "ENV": "test",
-        "GCP_LOCATION": "US",
-        "GCP_CGS_BUCKET": "test-bucket",
-        "GCP_CGS_BUCKET_DIR": "test-dir",
-    },
-)
-def test_upload_file_to_gcs(mock_storage_client):
-    """Test upload_file_to_gcs method."""
-    # Arrange
-    mock_client = Mock()
-    mock_bucket = Mock()
-    mock_blob = Mock()
-
-    mock_storage_client.return_value = mock_client
-    mock_client.get_bucket.return_value = mock_bucket
-    mock_bucket.blob.return_value = mock_blob
-
-    api = GoogleCloudAPI()
-    local_file_path = "test_file.txt"
-
-    # Act
-    api.upload_file_to_gcs(local_file_path)
-
-    # Assert
-    mock_storage_client.assert_called_once()
-    mock_client.get_bucket.assert_called_once_with("test-bucket")
-    mock_bucket.blob.assert_called_once_with("test-dir/test_file.txt")
-    mock_blob.upload_from_filename.assert_called_once_with(local_file_path)
-
-
-@patch("google.cloud.storage.Client")
-@patch.dict(
-    os.environ,
-    {
-        "GCP_PROJECT_ID": "test-project",
-        "GCP_BQ_DATASET": "test_dataset",
-        "ENV": "test",
-        "GCP_LOCATION": "US",
-        "GCP_CGS_BUCKET": "test-bucket",
-        "GCP_CGS_BUCKET_DIR": "test-dir",
-    },
-)
-def test_download_file_from_gcs(mock_storage_client):
-    """Test download_file_from_gcs method."""
-    # Arrange
-    mock_client = Mock()
-    mock_bucket = Mock()
-    mock_blob = Mock()
-
-    mock_storage_client.return_value = mock_client
-    mock_client.get_bucket.return_value = mock_bucket
-    mock_bucket.blob.return_value = mock_blob
-
-    api = GoogleCloudAPI()
-    local_file_path = "downloaded_file.txt"
-
-    # Act
-    api.download_file_from_gcs(local_file_path)
-
-    # Assert
-    mock_storage_client.assert_called_once()
-    mock_client.get_bucket.assert_called_once_with("test-bucket")
-    mock_bucket.blob.assert_called_once_with("test-dir/downloaded_file.txt")
-    mock_blob.download_to_filename.assert_called_once_with(local_file_path)

@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 # Function to load environment variables from .env file
 load_env() {
     echo "Loading environment variables from .env..."
@@ -21,6 +20,19 @@ load_env() {
 
 # Load environment variables
 load_env
+
+# Load model artifacts if MLflow is configured
+if [[ -n "$MLFLOW_TRACKING_URI" ]]; then
+    echo ""
+    echo "=== Loading Model Artifacts ==="
+    echo "Loading model artifacts for local development..."
+    ENV=${ENV:-"dev"} uv run --group dev python scripts/load_model_artifacts.py
+    echo "Model artifacts loaded successfully!"
+else
+    echo ""
+    echo "⚠️  MLflow not configured - skipping model loading"
+    echo "Set MLFLOW_TRACKING_URI and credentials in .env to enable model loading"
+fi
 
 # Generate auth tokens for testing
 echo ""

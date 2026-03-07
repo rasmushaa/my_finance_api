@@ -1,0 +1,97 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+      - stg
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: 'read'
+      id-token: 'write' # This is crucial for Workload Identity Federation
+
+    steps:
+    - name: Init Environment Variables
+      run: |
+        # Determine environment based on branch
+        if [ "${{ github.ref_name }}" == "main" ]; then
+          echo "ENV=prod" >> $GITHUB_ENV
+          echo "IMAGE_URI="${{ secrets.GCP_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-finance/fastapi-prod:latest" >> $GITHUB_ENV
+        else
+          echo "ENV=stg" >> $GITHUB_ENV
+          echo "IMAGE_URI="${{ secrets.GCP_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-finance/fastapi-stg:latest" >> $GITHUB_ENV
+        fi
+
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Authenticate with Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        project_id : ${{ secrets.GCP_PROJECT_ID }}
+        workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_POOL }}
+        service_account: ${{ secrets.GCP_DEPLOY_SA }}
+
+    - name: Set up Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+    - name: Configure Docker to use gcloud as a credential helper
+      run: |
+        gcloud auth configure-docker ${{ secrets.GCP_LOCATION }}-docker.pkg.dev
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+
+    - name: Create virtual environment
+      run: uv venv
+
+    - name: Install dependencies
+      run: |
+        export GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth application-default print-access-token)
+        uv pip install -e --index-url https://oauth2accesstoken:${GOOGLE_OAUTH_ACCESS_TOKEN}@${{ secrets.GCP_LOCATION }}-python.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/python-packages/simple/
+        python --version
+        uv pip list
+
+    - name: Run tests
+      run: |
+        uv run pytest
+
+    - name: Load model artifacts
+      run: |
+        export MLFLOW_TRACKING_URI="${{ secrets.MLFLOW_TRACKING_URI }}"
+        export MLFLOW_TRACKING_USERNAME="${{ secrets.MLFLOW_TRACKING_USERNAME }}"
+        export MLFLOW_TRACKING_PASSWORD="${{ secrets.MLFLOW_TRACKING_PASSWORD }}"
+        export ENV="${{ env.ENV }}"
+        uv run python scripts/load_model_artifacts.py
+
+    - name: Build and Push Docker image
+      run: |
+        docker build --build-arg ENV="${{ env.ENV }}" -t "${{ env.IMAGE_URI }}" .
+        docker push "${{ env.IMAGE_URI }}"
+
+    - name: Create env-vars.yaml
+      run: |
+        cat <<EOF > env-vars.yaml
+        GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        GCP_LOCATION: ${{ secrets.GCP_LOCATION }}
+        GCP_BQ_DATASET: ${{ secrets.GCP_BQ_DATASET }}
+        EOF
+
+    - name: Deploy Cloud Run Job
+      run: |
+        gcloud run deploy my-finance-api-${{ env.ENV }} \
+          --image "${{ env.IMAGE_URI }}" \
+          --region ${{ secrets.GCP_LOCATION }} \
+          --service-account ${{ secrets.GCP_MY_FINANCE_API_SA }} \
+          --env-vars-file env-vars.yaml \
+          --port 8080 \
+          --cpu 1 \
+          --memory 2000Mi \
+          --max-instances 1 \
+          --allow-unauthenticated
