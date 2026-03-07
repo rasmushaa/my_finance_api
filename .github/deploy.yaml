@@ -1,8 +1,0 @@
-CHAMPION_VERSION=$(mlflow models get-alias -m my-model -a prod)
-CHALLENGER_VERSION=$(mlflow models get-alias -m my-model -a challenger || echo "")
-
-gcloud run deploy portfolio-api \
-  --image gcr.io/PROJECT/portfolio-api \
-  --set-env-vars \
-    CHAMPION_MODEL_URI=models:/my-model/$CHAMPION_VERSION,\
-    CHALLENGER_MODEL_URI=models:/my-model/$CHALLENGER_VERSION

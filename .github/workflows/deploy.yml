@@ -20,10 +20,10 @@ jobs:
         # Determine environment based on branch
         if [ "${{ github.ref_name }}" == "main" ]; then
           echo "ENV=prod" >> $GITHUB_ENV
-          echo "IMAGE_URI="${{ secrets.GCP_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-finance/fastapi-prod:latest" >> $GITHUB_ENV
+          echo "IMAGE_URI=${{ secrets.GCP_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-finance/fastapi-prod:latest" >> $GITHUB_ENV
         else
           echo "ENV=stg" >> $GITHUB_ENV
-          echo "IMAGE_URI="${{ secrets.GCP_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-finance/fastapi-stg:latest" >> $GITHUB_ENV
+          echo "IMAGE_URI=${{ secrets.GCP_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-finance/fastapi-stg:latest" >> $GITHUB_ENV
         fi
 
     - name: Checkout code
