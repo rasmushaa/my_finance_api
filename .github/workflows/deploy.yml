@@ -63,7 +63,7 @@ jobs:
     - name: Run tests
       run: |
         export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-        uv run pytest
+        pytest
 
     - name: Load model artifacts
       run: |
@@ -71,7 +71,7 @@ jobs:
         export MLFLOW_TRACKING_USERNAME="${{ secrets.MLFLOW_TRACKING_USERNAME }}"
         export MLFLOW_TRACKING_PASSWORD="${{ secrets.MLFLOW_TRACKING_PASSWORD }}"
         export ENV="${{ env.ENV }}"
-        uv run python scripts/load_model_artifacts.py
+        python scripts/load_model_artifacts.py
 
     - name: Build and Push Docker image
       run: |
