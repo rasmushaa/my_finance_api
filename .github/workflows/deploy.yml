@@ -27,7 +27,7 @@ jobs:
         fi
 
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
 
     - name: Authenticate with Google Cloud
       uses: google-github-actions/auth@v2
@@ -54,12 +54,15 @@ jobs:
     - name: Install dependencies
       run: |
         export GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth application-default print-access-token)
-        uv pip install -e --index-url https://oauth2accesstoken:${GOOGLE_OAUTH_ACCESS_TOKEN}@${{ secrets.GCP_LOCATION }}-python.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/python-packages/simple/
+        # Install all project dependencies from pyproject.toml
+        uv pip install --extra-index-url https://oauth2accesstoken:${GOOGLE_OAUTH_ACCESS_TOKEN}@${{ secrets.GCP_LOCATION }}-python.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/python-packages/simple/ \
+          -e .[dev]
         python --version
         uv pip list
 
     - name: Run tests
       run: |
+        export PYTHONPATH="${PYTHONPATH}:$(pwd)"
         uv run pytest
 
     - name: Load model artifacts
@@ -72,7 +75,13 @@ jobs:
 
     - name: Build and Push Docker image
       run: |
-        docker build --build-arg ENV="${{ env.ENV }}" -t "${{ env.IMAGE_URI }}" .
+        export GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth application-default print-access-token)
+        docker build \
+          --build-arg ENV="${{ env.ENV }}" \
+          --build-arg GOOGLE_OAUTH_ACCESS_TOKEN="${GOOGLE_OAUTH_ACCESS_TOKEN}" \
+          --build-arg GCP_LOCATION="${{ secrets.GCP_LOCATION }}" \
+          --build-arg GCP_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}" \
+          -t "${{ env.IMAGE_URI }}" .
         docker push "${{ env.IMAGE_URI }}"
 
     - name: Create env-vars.yaml
