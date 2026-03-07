@@ -56,7 +56,7 @@ jobs:
         export GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth application-default print-access-token)
         # Install all project dependencies from pyproject.toml
         uv pip install --extra-index-url https://oauth2accesstoken:${GOOGLE_OAUTH_ACCESS_TOKEN}@${{ secrets.GCP_LOCATION }}-python.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/python-packages/simple/ \
-          -e .[dev]
+          -e . --group dev
         python --version
         uv pip list
 
@@ -64,6 +64,12 @@ jobs:
       run: |
         source .venv/bin/activate
         export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+        export APP_JWT_EXP_DELTA_MINUTES="60"
+        export APP_JWT_SECRET="test-jwt-secret-key"
+        export GCP_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+        export GCP_BQ_DATASET="${{ secrets.GCP_BQ_DATASET }}"
+        export GCP_LOCATION="${{ secrets.GCP_LOCATION }}"
+        export ENV="${{ env.ENV }}"
         pytest
 
     - name: Load model artifacts
