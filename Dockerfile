@@ -1,43 +1,47 @@
+# syntax=docker/dockerfile:1.7
 FROM python:3.11-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc curl && rm -rf /var/lib/apt/lists/*
+    gcc curl \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-# Copy everything needed for dependencies first (better layer caching)
-COPY pyproject.toml uv.lock /app/
+ARG ENV=dev
+ENV ENV=${ENV}
 
-# Accept build arguments for private registry authentication
-ARG GOOGLE_OAUTH_ACCESS_TOKEN
-ARG GCP_LOCATION
-ARG GCP_PROJECT_ID
+# Keep the project virtualenv inside the app directory
+ENV UV_PROJECT_ENVIRONMENT=/app/.venv
+ENV PATH="/app/.venv/bin:${PATH}"
 
-# Use uv workspace mode to install with frozen dependencies from uv.lock to system Python env
-# Configure authentication for private Artifact Registry if token is provided
-RUN uv venv --system && \
-    if [ -n "$GOOGLE_OAUTH_ACCESS_TOKEN" ]; then \
-        uv sync --frozen --extra-index-url https://oauth2accesstoken:${GOOGLE_OAUTH_ACCESS_TOKEN}@${GCP_LOCATION}-python.pkg.dev/${GCP_PROJECT_ID}/python-packages/simple/; \
-    else \
-        uv sync --frozen; \
-    fi
+# Copy dependency metadata first for better caching
+COPY pyproject.toml /app/
+COPY README* /app/
 
-# Copy application code
+# Copy lockfile too if you use one
+COPY uv.lock* /app/
+
+# Install only dependencies first, not the local project itself
+# The index is already defined in pyproject.toml as "private"
+RUN --mount=type=secret,id=oauth_token \
+    --mount=type=cache,target=/root/.cache/uv \
+    set -eux; \
+    TOKEN="$(cat /run/secrets/oauth_token)"; \
+    export UV_INDEX_PRIVATE_USERNAME="oauth2accesstoken"; \
+    export UV_INDEX_PRIVATE_PASSWORD="${TOKEN}"; \
+    uv sync --no-dev --no-install-project
+
+# Now copy the application code and artifacts
 COPY app /app/app/
-
-# Copy model artifacts (assumed to be pre-loaded by CI/CD pipeline, NOT from local ./model_artifacts!)
 COPY model_artifacts /app/model_artifacts/
 
-# Runtime environment (set by deployment context)
-ARG ENV=dev
-ENV ENV=$ENV
+RUN useradd --create-home --shell /bin/bash appuser \
+    && chown -R appuser:appuser /app
 
-# Create non-root user for security (Cloud Run best practice)
-RUN useradd --create-home --shell /bin/bash app \
-    && chown -R app:app /app
-USER app
+USER appuser
 
-# Use environment variable for port (Cloud Run requirement)
+EXPOSE 8080
+
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]

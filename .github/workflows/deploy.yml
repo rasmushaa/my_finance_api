@@ -1,3 +1,44 @@
+# Deploy to Cloud Run Workflow
+#
+# This workflow builds and deploys a FastAPI application to Google Cloud Run
+# with support for private Python packages from Google Artifact Registry.
+#
+# BRANCH LOGIC:
+# - main branch  → deploys to production environment (ENV=prod)
+# - stg branch   → deploys to staging environment (ENV=stg)
+#
+# PRIVATE PACKAGE AUTHENTICATION:
+# Uses Google Cloud OAuth tokens to authenticate with private Python package registry.
+# The workflow:
+# 1. Gets OAuth token via `gcloud auth application-default print-access-token`
+# 2. Sets UV environment variables: UV_INDEX_PRIVATE_USERNAME="oauth2accesstoken", UV_INDEX_PRIVATE_PASSWORD="<token>"
+# 3. UV uses pyproject.toml configuration ([[tool.uv.index]] name="private") to access private packages
+# 4. For Docker builds, token is passed as --secret and converted to UV vars inside Dockerfile
+#
+# DOCKER IMAGE:
+# - Uses multi-stage approach: dependencies first (cached), then app code
+# - Private package access via mounted OAuth token secret
+# - Leverages pyproject.toml UV index configuration for private packages
+# - Images tagged by environment: fastapi-prod:latest or fastapi-stg:latest
+#
+# REQUIRED GITHUB SECRETS:
+# Authentication & Infrastructure:
+#   GCP_PROJECT_ID                 - Google Cloud project ID
+#   GCP_LOCATION                   - Google Cloud region (e.g., europe-north1)
+#   GCP_WORKLOAD_IDENTITY_POOL     - Workload Identity Federation if format "projects/<project-number>/locations/global/workloadIdentityPools/<pool-name>/providers/<provider-name>"
+#   GCP_DEPLOY_SA                  - Service account email for deployment
+#   GCP_MY_FINANCE_API_SA          - Service account email for the Cloud Run service
+#   GCP_BQ_DATASET                 - BigQuery dataset name for the application
+#
+# Application Configuration:
+#   APP_JWT_SECRET                 - JWT signing secret for authentication
+#   APP_JWT_EXP_DELTA_MINUTES      - JWT token expiration time in minutes
+#
+# MLflow Integration (for model artifacts):
+#   MLFLOW_TRACKING_URI            - MLflow server URL
+#   MLFLOW_TRACKING_USERNAME       - MLflow server username
+#   MLFLOW_TRACKING_PASSWORD       - MLflow server password
+#
 name: Deploy to Cloud Run
 
 on:
@@ -53,16 +94,16 @@ jobs:
 
     - name: Install dependencies
       run: |
-        export GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth application-default print-access-token)
-        # Install all project dependencies from pyproject.toml
-        uv pip install --extra-index-url https://oauth2accesstoken:${GOOGLE_OAUTH_ACCESS_TOKEN}@${{ secrets.GCP_LOCATION }}-python.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/python-packages/simple/ \
-          -e . --group dev
+        TOKEN=$(gcloud auth application-default print-access-token)
+        export UV_INDEX_PRIVATE_USERNAME="oauth2accesstoken"
+        export UV_INDEX_PRIVATE_PASSWORD="${TOKEN}"
+        # Use uv sync to leverage pyproject.toml index configuration
+        uv sync --group dev
         python --version
         uv pip list
 
     - name: Run tests
       run: |
-        source .venv/bin/activate
         export PYTHONPATH="${PYTHONPATH}:$(pwd)"
         export APP_JWT_EXP_DELTA_MINUTES="60"
         export APP_JWT_SECRET="test-jwt-secret-key"
@@ -70,31 +111,30 @@ jobs:
         export GCP_BQ_DATASET="${{ secrets.GCP_BQ_DATASET }}"
         export GCP_LOCATION="${{ secrets.GCP_LOCATION }}"
         export ENV="${{ env.ENV }}"
-        pytest
+        uv run pytest
 
     - name: Load model artifacts
       run: |
-        source .venv/bin/activate
         export MLFLOW_TRACKING_URI="${{ secrets.MLFLOW_TRACKING_URI }}"
         export MLFLOW_TRACKING_USERNAME="${{ secrets.MLFLOW_TRACKING_USERNAME }}"
         export MLFLOW_TRACKING_PASSWORD="${{ secrets.MLFLOW_TRACKING_PASSWORD }}"
         export ENV="${{ env.ENV }}"
-        python scripts/load_model_artifacts.py
+        uv run python scripts/load_model_artifacts.py
 
     - name: Build and Push Docker image
       run: |
-        export GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth application-default print-access-token)
-        docker build \
+        TOKEN=$(gcloud auth application-default print-access-token)
+        echo "$TOKEN" | docker build \
+          --secret id=oauth_token,src=- \
           --build-arg ENV="${{ env.ENV }}" \
-          --build-arg GOOGLE_OAUTH_ACCESS_TOKEN="${GOOGLE_OAUTH_ACCESS_TOKEN}" \
-          --build-arg GCP_LOCATION="${{ secrets.GCP_LOCATION }}" \
-          --build-arg GCP_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}" \
           -t "${{ env.IMAGE_URI }}" .
         docker push "${{ env.IMAGE_URI }}"
 
     - name: Create env-vars.yaml
       run: |
         cat <<EOF > env-vars.yaml
+        APP_JWT_SECRET: ${{ secrets.APP_JWT_SECRET }}
+        APP_JWT_EXP_DELTA_MINUTES: ${{ secrets.APP_JWT_EXP_DELTA_MINUTES }}
         GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         GCP_LOCATION: ${{ secrets.GCP_LOCATION }}
         GCP_BQ_DATASET: ${{ secrets.GCP_BQ_DATASET }}
