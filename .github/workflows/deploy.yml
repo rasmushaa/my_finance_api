@@ -124,10 +124,18 @@ jobs:
     - name: Build and Push Docker image
       run: |
         TOKEN=$(gcloud auth application-default print-access-token)
-        echo "$TOKEN" | docker build \
-          --secret id=oauth_token,src=- \
+        # Create temp file for BuildKit secret (more reliable than piping)
+        TOKEN_FILE=$(mktemp)
+        echo -n "$TOKEN" > "$TOKEN_FILE"
+
+        DOCKER_BUILDKIT=1 docker build \
+          --secret id=oauth_token,src="$TOKEN_FILE" \
           --build-arg ENV="${{ env.ENV }}" \
           -t "${{ env.IMAGE_URI }}" .
+
+        # Cleanup temp file
+        rm -f "$TOKEN_FILE"
+
         docker push "${{ env.IMAGE_URI }}"
 
     - name: Create env-vars.yaml
