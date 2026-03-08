@@ -141,11 +141,11 @@ jobs:
     - name: Create env-vars.yaml
       run: |
         cat <<EOF > env-vars.yaml
-        APP_JWT_SECRET: ${{ secrets.APP_JWT_SECRET }}
-        APP_JWT_EXP_DELTA_MINUTES: ${{ secrets.APP_JWT_EXP_DELTA_MINUTES }}
-        GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-        GCP_LOCATION: ${{ secrets.GCP_LOCATION }}
-        GCP_BQ_DATASET: ${{ secrets.GCP_BQ_DATASET }}
+        APP_JWT_SECRET: "${{ secrets.APP_JWT_SECRET }}"
+        APP_JWT_EXP_DELTA_MINUTES: "${{ secrets.APP_JWT_EXP_DELTA_MINUTES }}"
+        GCP_PROJECT_ID: "${{ secrets.GCP_PROJECT_ID }}"
+        GCP_LOCATION: "${{ secrets.GCP_LOCATION }}"
+        GCP_BQ_DATASET: "${{ secrets.GCP_BQ_DATASET }}"
         EOF
 
     - name: Deploy Cloud Run Job
