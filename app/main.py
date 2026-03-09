@@ -2,10 +2,18 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
+from slowapi.errors import RateLimitExceeded
 
 from app import schemas
 from app.auth import require_admin, require_login
+from app.rate_limiter import (
+    DATA_LIMITS,
+    ML_PREDICT_LIMITS,
+    custom_rate_limit_handler,
+    limiter,
+)
+from app.security import RequestLoggingMiddleware, SecurityMiddleware
 from app.services.categories import CategoriesService
 from app.services.container import (
     get_categories_service,
@@ -49,10 +57,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="MyFinance ML API", lifespan=lifespan)
 
+# Add middleware in reverse order (last added = first executed)
+app.add_middleware(SecurityMiddleware, max_request_size=1024 * 1024)  # 1MB limit
+app.add_middleware(RequestLoggingMiddleware)
+
+# Add rate limiter to the app
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, custom_rate_limit_handler)
+
 
 # --------------------------- Health Check Endpoint ---------------------------
 @app.get("/health")
-def health():
+def health(request: Request):
     return {"status": "ok"}
 
 
@@ -65,14 +81,20 @@ def health():
             "model": schemas.ErrorResponse,
             "description": "Bad Request - Invalid input features",
         },
+        429: {
+            "model": schemas.ErrorResponse,
+            "description": "Too Many Requests - Rate limit exceeded",
+        },
         503: {
             "model": schemas.ErrorResponse,
             "description": "Service Unavailable - Model not ready",
         },
     },
 )
+@limiter.limit(ML_PREDICT_LIMITS)
 def predict(
-    request: schemas.PredictRequest,
+    request: Request,
+    predict_request: schemas.PredictRequest,
     payload: dict = Depends(require_login),
     store: ModelStore = Depends(get_model_store),
 ):
@@ -91,7 +113,7 @@ def predict(
             details={"model_status": store.status.value},
         )
 
-    df = request.to_dataframe()
+    df = predict_request.to_dataframe()
     preds = store.predict(df)
     return schemas.PredictResponse(predictions=preds)
 
@@ -104,6 +126,10 @@ def predict(
             "model": schemas.ErrorResponse,
             "description": "Forbidden - Requires admin role",
         },
+        429: {
+            "model": schemas.ErrorResponse,
+            "description": "Too Many Requests - Rate limit exceeded",
+        },
         503: {
             "model": schemas.ErrorResponse,
             "description": "Service Unavailable - Model not ready",
@@ -111,7 +137,9 @@ def predict(
     },
 )
 def get_model_metadata(
-    payload: dict = Depends(require_admin), store: ModelStore = Depends(get_model_store)
+    request: Request,
+    payload: dict = Depends(require_admin),
+    store: ModelStore = Depends(get_model_store),
 ):
     # Check if model is ready before making predictions
     if not store.is_ready:
@@ -137,11 +165,18 @@ def get_model_metadata(
         403: {
             "model": schemas.ErrorResponse,
             "description": "Forbidden - Requires admin role",
-        }
+        },
+        429: {
+            "model": schemas.ErrorResponse,
+            "description": "Too Many Requests - Rate limit exceeded",
+        },
     },
 )
+@limiter.limit(DATA_LIMITS)
 def get_model_status(
-    payload: dict = Depends(require_login), store: ModelStore = Depends(get_model_store)
+    request: Request,
+    payload: dict = Depends(require_login),
+    store: ModelStore = Depends(get_model_store),
 ):
     response = {
         "status": store.status.value,
@@ -152,8 +187,19 @@ def get_model_status(
 
 
 # -------------------------- Data Endpoints --------------------------
-@app.get("/data/categories/expenditure", response_model=schemas.CategoriesResponse)
+@app.get(
+    "/data/categories/expenditure",
+    response_model=schemas.CategoriesResponse,
+    responses={
+        429: {
+            "model": schemas.ErrorResponse,
+            "description": "Too Many Requests - Rate limit exceeded",
+        },
+    },
+)
+@limiter.limit(DATA_LIMITS)
 def get_expenditure_categories(
+    request: Request,
     payload: dict = Depends(require_login),
     categories_service: CategoriesService = Depends(get_categories_service),
 ):
@@ -161,8 +207,19 @@ def get_expenditure_categories(
     return schemas.CategoriesResponse(categories=categories_list)
 
 
-@app.get("/data/categories/asset", response_model=schemas.CategoriesResponse)
+@app.get(
+    "/data/categories/asset",
+    response_model=schemas.CategoriesResponse,
+    responses={
+        429: {
+            "model": schemas.ErrorResponse,
+            "description": "Too Many Requests - Rate limit exceeded",
+        },
+    },
+)
+@limiter.limit(DATA_LIMITS)
 def get_asset_categories(
+    request: Request,
     payload: dict = Depends(require_login),
     categories_service: CategoriesService = Depends(get_categories_service),
 ):

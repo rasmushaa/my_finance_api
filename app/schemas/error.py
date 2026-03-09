@@ -14,6 +14,7 @@ class ErrorCode(Enum):
     INVALID_INPUT = "INVALID_INPUT"
     UNAUTHORIZED = "UNAUTHORIZED"
     FORBIDDEN = "FORBIDDEN"
+    RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED"
 
 
 class ErrorDetail(BaseModel):
