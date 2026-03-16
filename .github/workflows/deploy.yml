@@ -23,6 +23,8 @@
 #
 # REQUIRED GITHUB SECRETS:
 # Authentication & Infrastructure:
+#   GOOGLE_OAUTH_CLIENT_ID         - OAuth client ID for Google authentication
+#   GOOGLE_OAUTH_CLIENT_SECRET     - OAuth client secret for Google authentication (from WIF pool provider)
 #   GCP_PROJECT_ID                 - Google Cloud project ID
 #   GCP_LOCATION                   - Google Cloud region (e.g., europe-north1)
 #   GCP_WORKLOAD_IDENTITY_POOL     - Workload Identity Federation if format "projects/<project-number>/locations/global/workloadIdentityPools/<pool-name>/providers/<provider-name>"
@@ -118,8 +120,14 @@ jobs:
     - name: Run tests
       run: |
         export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-        # Load all variables from env-vars.yaml
-        export $(grep -v '^#' env-vars.yaml | xargs)
+        # Load all variables from env-vars.yaml (parse YAML format)
+        while IFS=': ' read -r key value; do
+          if [[ ! "$key" =~ ^#.* && -n "$key" ]]; then
+            # Remove quotes from value
+            clean_value=$(echo "$value" | sed 's/^"//;s/"$//')
+            export "$key=$clean_value"
+          fi
+        done < env-vars.yaml
         uv run pytest
 
     - name: Load model artifacts
