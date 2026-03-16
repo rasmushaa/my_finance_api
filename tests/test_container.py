@@ -1,10 +1,15 @@
 """Tests for the DI Container core functionality."""
 
+import os
 from unittest.mock import Mock
 
 import pytest
 
 from app.core.container import Container
+
+# Container needs JWT, which needs environment variables
+os.environ["APP_JWT_SECRET"] = "test-secret-key-for-jwt-testing"
+os.environ["APP_JWT_EXP_DELTA_MINUTES"] = "60"
 
 
 def test_container_initialization():

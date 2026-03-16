@@ -1,3 +1,4 @@
+import os
 from unittest.mock import patch
 
 import pytest
@@ -12,6 +13,10 @@ from app.core.exceptions.base import ErrorCodes
 from app.core.exceptions.model import ModelNotAvailableError
 from app.main import app
 from app.services.model import ModelLoadingStatus
+
+# Container needs JWT, which needs environment variables
+os.environ["APP_JWT_SECRET"] = "test-secret-key-for-jwt-testing"
+os.environ["APP_JWT_EXP_DELTA_MINUTES"] = "60"
 
 
 # --------------- Mock Model Store and Dummy Model for Testing ----------------

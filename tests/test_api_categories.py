@@ -1,5 +1,7 @@
 """Test FastAPI categories endpoints using DI container pattern."""
 
+import os
+
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
@@ -7,6 +9,10 @@ from fastapi.testclient import TestClient
 from app.api.dependencies.providers import get_categories_service, get_require_user
 from app.main import app
 from app.services.categories import CategoriesService
+
+# Container needs JWT, which needs environment variables
+os.environ["APP_JWT_SECRET"] = "test-secret-key-for-jwt-testing"
+os.environ["APP_JWT_EXP_DELTA_MINUTES"] = "60"
 
 
 # --------------- Mock Database Client and Service for Testing ----------------
