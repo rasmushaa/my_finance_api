@@ -1,10 +1,8 @@
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
 
-from app.core.exceptions.auth import MissingBearerTokenError
-from app.core.exceptions.base import AppError, ErrorCodes
-from app.services.jwt import APP_JWT_ALG, APP_JWT_SECRET
+from app.core.container import container
+from app.core.exceptions.auth import MissingBearerTokenError, UserNotAuthorizedError
 
 security = HTTPBearer(
     auto_error=False
@@ -39,21 +37,7 @@ def require_user(
         raise MissingBearerTokenError()
 
     token = creds.credentials
-    try:
-        payload = jwt.decode(
-            token,
-            APP_JWT_SECRET,
-            algorithms=[APP_JWT_ALG],
-            audience="my-finance-api-users",
-            issuer="my-finance-api",
-        )
-    except JWTError:
-        raise AppError(
-            status_code=401,
-            code=ErrorCodes.UNAUTHORIZED.value,
-            message="Invalid or expired token",
-        )
-
+    payload = container.resolve("jwt_service").decode_jwt(token)
     return payload
 
 
@@ -82,11 +66,7 @@ def require_role(role: str):
 
     def _checker(payload: dict = Depends(require_user)) -> dict:
         if payload.get("role") != role:
-            raise AppError(
-                status_code=403,
-                code=ErrorCodes.FORBIDDEN.value,
-                message=f"User does not have required role: {role}",
-            )
+            raise UserNotAuthorizedError()
         return payload
 
     return _checker

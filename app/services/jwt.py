@@ -2,19 +2,15 @@ import asyncio
 import logging
 import os
 import time
+from dataclasses import dataclass
 from typing import Protocol
 
 import numpy as np
 from jose import jwt
 
-from app.core.exceptions.auth import UserNotFoundError
+from app.core.exceptions.auth import InvalidIdTokenError, UserNotFoundError
 
 logger = logging.getLogger(__name__)
-
-
-APP_JWT_ALG = "HS256"
-APP_JWT_TTL_MIN = int(os.environ["APP_JWT_EXP_DELTA_MINUTES"])
-APP_JWT_SECRET = os.environ["APP_JWT_SECRET"]
 
 
 class UserClientProtocol(Protocol):
@@ -26,6 +22,23 @@ class UserClientProtocol(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class JWTConfig:
+    """Readonly configuration for JWT operations."""
+
+    algorithm: str = "HS256"
+
+    @property
+    def secret(self) -> str:
+        """Get JWT secret from environment variable."""
+        return os.environ["APP_JWT_SECRET"]
+
+    @property
+    def token_expire_minutes(self) -> int:
+        """Get JWT expiration time from environment variable."""
+        return int(os.environ["APP_JWT_EXP_DELTA_MINUTES"])
+
+
 class AppJwtService:
     def __init__(self, user_client: UserClientProtocol):
         """Initialize the JWT service.
@@ -34,17 +47,16 @@ class AppJwtService:
         ----------
         user_client : UserClientProtocol
             A client that implements the UserClientProtocol for fetching user data.
-        __secret_key : str
-            The secret key used for signing JWTs, loaded from environment variable.
-        __algorithm : str
-            The algorithm used for signing JWTs, set to HS256.
-        __token_expire_minutes : int
-            The expiration time for JWTs in minutes, loaded from environment variable.
+        __config : JWTConfig
+            The configuration object containing JWT settings.
         """
         self.user_client = user_client
-        self.__secret_key = APP_JWT_SECRET
-        self.__algorithm = APP_JWT_ALG
-        self.__token_expire_minutes = APP_JWT_TTL_MIN
+        self.__config = JWTConfig()
+
+    @property
+    def config(self) -> JWTConfig:
+        """Public property to access JWT configuration."""
+        return self.__config
 
     async def auth_with_delay(self, email: str) -> str:
         """Authenticate user and issue app JWT.
@@ -69,10 +81,35 @@ class AppJwtService:
             raise UserNotFoundError()
         return self.__issue_app_jwt(email=email, role=user["role"])
 
+    def decode_jwt(self, token: str) -> dict:
+        """Decode a JWT token and return its payload.
+
+        Parameters
+        ----------
+        token : str
+            The JWT token to decode.
+
+        Returns
+        -------
+        dict
+            The decoded JWT payload containing user information and claims.
+        """
+        try:
+            payload = jwt.decode(
+                token,
+                self.__config.secret,
+                algorithms=[self.__config.algorithm],
+                audience="my-finance-api-users",
+                issuer="my-finance-api",
+            )
+            return payload
+        except jwt.JWTError as e:
+            raise InvalidIdTokenError()
+
     def __issue_app_jwt(self, email: str, role: str) -> str:
         """Issue a JWT for the given user email and role.
 
-        The token will be valid for a duration defined by APP_JWT_TTL_MIN.
+        The token will be valid for a duration defined by jwt_config.token_expire_minutes.
 
         Parameters
         ----------
@@ -100,8 +137,10 @@ class AppJwtService:
             "sub": email,
             "role": role,
             "iat": now,
-            "exp": now + self.__token_expire_minutes * 60,
+            "exp": now + self.__config.token_expire_minutes * 60,
             "iss": "my-finance-api",
             "aud": "my-finance-api-users",
         }
-        return jwt.encode(payload, self.__secret_key, algorithm=self.__algorithm)
+        return jwt.encode(
+            payload, self.__config.secret, algorithm=self.__config.algorithm
+        )

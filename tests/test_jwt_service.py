@@ -58,9 +58,9 @@ def test_initialization_with_user_client(mock_user_client):
     service = AppJwtService(mock_user_client)
 
     assert service.user_client == mock_user_client
-    assert service._AppJwtService__secret_key == JWT_TEST_SECRET
-    assert service._AppJwtService__algorithm == "HS256"
-    assert service._AppJwtService__token_expire_minutes == JWT_EXP_MINUTES
+    assert service.config.secret == JWT_TEST_SECRET
+    assert service.config.algorithm == "HS256"
+    assert service.config.token_expire_minutes == JWT_EXP_MINUTES
 
 
 # Authentication Tests

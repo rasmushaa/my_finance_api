@@ -7,7 +7,7 @@ class MissingBearerTokenError(AppError):
             status_code=401,
             code=ErrorCodes.MISSING_BEARER_TOKEN.value,
             message="Missing authorization header",
-            details=details or {},
+            # No sensitive details to include in the error response
         )
 
 
@@ -57,5 +57,15 @@ class UserNotFoundError(AppError):
             status_code=404,
             code=ErrorCodes.AUTH.value,
             message="User email not found",
+            # Do not include sensitive details in the error response
+        )
+
+
+class UserNotAuthorizedError(AppError):
+    def __init__(self, details: dict | None = None):
+        super().__init__(
+            status_code=403,
+            code=ErrorCodes.FORBIDDEN.value,
+            message="User does not have required permissions",
             # Do not include sensitive details in the error response
         )
