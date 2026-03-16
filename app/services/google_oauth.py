@@ -21,34 +21,19 @@ logger = logging.getLogger(__name__)
 class GoogleOAuthService:
     """Service for handling Google OAuth operations."""
 
-    def __init__(
-        self,
-        client_id: str = None,
-        client_secret: str = None,
-        token_uri: str = None,
-    ):
-        """Initialize Google OAuth service.
-
-        Parameters
-        ----------
-        client_id : str
-            Google OAuth client ID (from environment if not provided)
-        client_secret : str
-            Google OAuth client secret (from environment if not provided)
-        token_uri : str
-            Google token exchange URI (from environment if not provided)
-        """
+    def __init__(self):
+        """Initialize Google OAuth service."""
 
         # OAuth configuration from environment variables or parameters
-        self.client_id = client_id or os.environ.get("GOOGLE_CLIENT_ID")
-        self.client_secret = client_secret or os.environ.get("GOOGLE_CLIENT_SECRET")
-        self.token_uri = token_uri or os.environ.get(
-            "GOOGLE_TOKEN_URI", "https://oauth2.googleapis.com/token"
+        self.client_id = os.environ["GOOGLE_OAUTH_CLIENT_ID"]
+        self.client_secret = os.environ["GOOGLE_OAUTH_CLIENT_SECRET"]
+        self.token_uri = os.environ.get(
+            "GOOGLE_OAUTH_TOKEN_URI", "https://oauth2.googleapis.com/token"
         )
 
         if not self.client_id or not self.client_secret:
             raise ValueError(
-                "Google OAuth client ID and secret must be provided via environment variables or parameters"
+                "Google OAuth client ID must be provided via environment variables or parameters"
             )
 
         if not self.client_secret:

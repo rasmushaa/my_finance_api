@@ -24,6 +24,7 @@ async def auth_google_code(
     - **request** (GoogleCodeExchangeRequest): The request body containing the authorization code.
     - **google_oauth_service** (GoogleOAuthService): The service used to handle Google OAuth operations.
     - **jwt_service** (JWTService): The service used to handle JWT operations.
+
     **Returns:**
     - **GoogleCodeExchangeResponse**: The response containing the access token and user info.
 

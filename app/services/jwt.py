@@ -35,7 +35,16 @@ class JWTConfig:
 
     @property
     def token_expire_minutes(self) -> int:
-        """Get JWT expiration time from environment variable."""
+        """Get JWT expiration time from environment variable.
+
+        Details
+        -------
+        Using the key method mandates to have placed the variable at runtime,
+        which does not allow to run profcution with default values.
+        However, this requieres to inlclude the variables in every test module,
+        which may not even use the JWT service directly,
+        but only through the security dependencies.
+        """
         return int(os.environ["APP_JWT_EXP_DELTA_MINUTES"])
 
 
