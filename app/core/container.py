@@ -1,17 +1,14 @@
 from typing import Any, Callable, Protocol
 
-from app.database_client import GoogleCloudAPI
+from app.core.database_client import GoogleCloudAPI
 from app.services.categories import CategoriesService
-from app.services.model_store import ModelStore
+from app.services.google_oauth import GoogleOAuthService
+from app.services.jwt import AppJwtService
+from app.services.model import ModelService
+from app.services.users import UsersService
 
 
 # ------------------- Protocols for Type Hinting ------------------
-class DatabaseClient(Protocol):
-    def sql_to_pandas(self, sql: str): ...
-    @property
-    def dataset(self) -> str: ...
-
-
 class StartupService(Protocol):
     async def load(self) -> None: ...
 
@@ -83,44 +80,52 @@ container = Container()
 def setup_container():
     """Set up the dependency injection container with all services and clients.
 
-    This function should be called once at application startup to register all
-    dependencies. The container uses lazy providers, so actual instances are only
-    created when resolved, allowing for efficient resource management and easy mocking
-    in tests.
+    This function is called once at application startup to register all dependencies.
+    The container uses lazy providers, so actual instances are only created when
+    resolved, allowing for efficient resource management and easy mocking in tests.
     """
 
     # Cloud clients - register as singletons since they manage their own connections and state
     container.register("cloud_client", lambda: GoogleCloudAPI(), singleton=True)
 
-    # Database services
-    def create_lazy_categories_service():
-        cloud_client = container.resolve("cloud_client")
-        return CategoriesService(db_client=cloud_client)
+    # Generic factory for services requiring a database client
+    def create_service_with_db_client(service_class):
+        def provider():
+            cloud_client = container.resolve("cloud_client")
+            return service_class(db_client=cloud_client)
 
-    container.register("categories_service", create_lazy_categories_service)
+        return provider
+
+    # Database services
+    container.register(
+        "categories_service", create_service_with_db_client(CategoriesService)
+    )
+    container.register("users_service", create_service_with_db_client(UsersService))
+
+    # JWT service - singleton for performance
+    container.register(
+        "jwt_service",
+        lambda: AppJwtService(user_client=container.resolve("users_service")),
+        singleton=True,
+    )
+
+    # OAuth services - singletons for performance
+    container.register(
+        "google_oauth_service", lambda: GoogleOAuthService(), singleton=True
+    )
 
     # Model service - singleton because it loads heavy ML models
-    container.register("model_store", lambda: ModelStore(), singleton=True)
+    container.register("model_store", lambda: ModelService(), singleton=True)
 
 
-# Automatically setup when module is imported
 setup_container()
-
-
-# ----------------------- Dependency Resolution Functions -----------------------
-def get_categories_service() -> CategoriesService:
-    return container.resolve("categories_service")
-
-
-def get_model_store() -> ModelStore:
-    return container.resolve("model_store")
 
 
 # ----------------------- Utility Functions for Lifecycle Management -----------------------
 def get_services_requiring_startup() -> list[StartupService]:
     """Get services that need startup tasks (e.g., background loading).
 
-    These are intended to call in FastAPI's startup event
+    These are intended to be called in FastAPI's startup event
     to ensure they are ready before handling requests.
 
     Returns: List[StartupService]

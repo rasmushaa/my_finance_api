@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from app.database_client import GoogleCloudAPI
+from app.core.database_client import GoogleCloudAPI
 
 
 @patch.dict(

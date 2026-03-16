@@ -4,12 +4,13 @@ import logging
 import os
 from enum import Enum
 from importlib.metadata import version
-from typing import Dict, Optional
+from typing import Dict
 
 import mlflow
 import pandas as pd
 from mlflow.pyfunc import PyFuncModel
 
+from app.core.exceptions.model import ModelFileNotFoundError, ModelNotAvailableError
 from app.schemas.model import CANONICAL_FEATURES
 
 logger = logging.getLogger(__name__)
@@ -26,19 +27,18 @@ class ModelLoadingStatus(Enum):
     READY = "ready"
 
 
-class ModelStore:
+class ModelService:
     """Class to manage local MlFlow models.
 
     This class handles loading the model artifacts, validating them, and providing an
     interface for making predictions. The model is loaded asynchronously at application
-    startup, and the store maintains the loading status.
+    startup, and the service maintains the loading status.
     """
 
     def __init__(self):
         self.__model: PyFuncModel | None = None
         self.__model_info: dict = {}
         self.__status: ModelLoadingStatus = ModelLoadingStatus.NOT_STARTED
-        self.__error_message: Optional[str] = None
 
     @property
     def status(self) -> ModelLoadingStatus:
@@ -49,20 +49,16 @@ class ModelStore:
         return self.__status == ModelLoadingStatus.READY
 
     @property
-    def error_message(self) -> Optional[str]:
-        return self.__error_message
-
-    @property
     def metadata(self) -> Dict[str, str]:
         """Return model custom metadata including tags.
 
         Raises
         ------
-        ValueError
+        ModelNotAvailableError
             If model is not ready and metadata is not available.
         """
         if not self.is_ready:
-            raise ValueError("Model is not ready, metadata not available")
+            raise ModelNotAvailableError(details={"model_status": self.status.value})
         return self.__model_info
 
     def predict(self, input_df: pd.DataFrame) -> list:
@@ -73,7 +69,7 @@ class ModelStore:
 
         Raises
         ------
-        ValueError
+        ModelNotAvailableError
             If model is not ready and prediction cannot be made.
 
         Returns
@@ -82,7 +78,7 @@ class ModelStore:
             List of predictions from the model.
         """
         if not self.is_ready:
-            raise ValueError("Model is not ready, prediction cannot be made")
+            raise ModelNotAvailableError(details={"model_status": self.status.value})
         model_features = [f.name for f in self.__model.metadata.signature.inputs]
         used_data = input_df[model_features]
         return self.__model.predict(used_data).tolist()
@@ -115,7 +111,7 @@ class ModelStore:
         """Load model metadata such as version and feature requirements."""
         meta_file = os.path.join(MODEL_ARTIFACTS_PATH, "model_metadata.json")
         if not os.path.exists(meta_file):
-            raise ValueError("Model metadata file not found in artifacts")
+            raise ModelFileNotFoundError(details={"file": meta_file})
         with open(meta_file) as f:
             metadata = json.load(f)
         return metadata
@@ -134,7 +130,7 @@ class ModelStore:
         requirements_file = os.path.join(MODEL_ARTIFACTS_PATH, "requirements.txt")
 
         if not os.path.exists(requirements_file):
-            raise ValueError("Model requirements.txt not found in artifacts")
+            raise ModelFileNotFoundError(details={"file": requirements_file})
 
         with open(requirements_file) as f:
             requirements = f.read()
@@ -145,8 +141,11 @@ class ModelStore:
         )
 
         if not polymodel_requirement:
-            raise ValueError(
-                "polymodel requirement not found in model requirements.txt"
+            raise ModelFileNotFoundError(
+                details={
+                    "file": requirements_file,
+                    "message": "polymodel requirement not found in model requirements.txt",
+                }
             )
 
         required_version = polymodel_requirement.split("=")[-1].strip()

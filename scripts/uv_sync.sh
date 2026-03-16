@@ -5,4 +5,4 @@
 TOKEN="$(gcloud auth print-access-token)"
 export UV_INDEX_PRIVATE_USERNAME="oauth2accesstoken"
 export UV_INDEX_PRIVATE_PASSWORD="${TOKEN}"
-uv sync --upgrade
+uv sync --upgrade --dev

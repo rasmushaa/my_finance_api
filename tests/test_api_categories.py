@@ -4,10 +4,9 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-from app.auth import require_user
+from app.api.dependencies.providers import get_categories_service, get_require_user
 from app.main import app
 from app.services.categories import CategoriesService
-from app.services.container import get_categories_service
 
 
 # --------------- Mock Database Client and Service for Testing ----------------
@@ -86,25 +85,24 @@ def cleanup_overrides():
 def test_get_expenditure_categories_endpoint():
     """Test the expenditure categories API endpoint with mocked service."""
     # Override auth and service dependencies
-    app.dependency_overrides[require_user] = mock_require_user
+    app.dependency_overrides[get_require_user] = mock_require_user
     app.dependency_overrides[get_categories_service] = override_categories_service
 
     client = TestClient(app)
-    response = client.get("/data/categories/expenditure")
-
+    response = client.get("/data/categories/expenditures")
+    print(response.json())
     assert response.status_code == 200
-    response_data = response.json()
-    assert response_data == {"categories": ["Food", "Transport"]}
+    assert response.json() == {"categories": ["Food", "Transport"]}
 
 
 def test_get_asset_categories_endpoint():
     """Test the asset categories API endpoint with mocked service."""
     # Override dependencies
-    app.dependency_overrides[require_user] = mock_require_user
+    app.dependency_overrides[get_require_user] = mock_require_user
     app.dependency_overrides[get_categories_service] = override_categories_service
 
     client = TestClient(app)
-    response = client.get("/data/categories/asset")
+    response = client.get("/data/categories/assets")
 
     assert response.status_code == 200
     response_data = response.json()
@@ -114,11 +112,11 @@ def test_get_asset_categories_endpoint():
 def test_expenditure_categories_empty_response():
     """Test expenditure categories endpoint when service returns empty list."""
     # Override dependencies
-    app.dependency_overrides[require_user] = mock_require_user
+    app.dependency_overrides[get_require_user] = mock_require_user
     app.dependency_overrides[get_categories_service] = override_categories_service_empty
 
     client = TestClient(app)
-    response = client.get("/data/categories/expenditure")
+    response = client.get("/data/categories/expenditures")
 
     assert response.status_code == 200
     response_data = response.json()
@@ -128,11 +126,11 @@ def test_expenditure_categories_empty_response():
 def test_asset_categories_empty_response():
     """Test asset categories endpoint when service returns empty list."""
     # Override dependencies
-    app.dependency_overrides[require_user] = mock_require_user
+    app.dependency_overrides[get_require_user] = mock_require_user
     app.dependency_overrides[get_categories_service] = override_categories_service_empty
 
     client = TestClient(app)
-    response = client.get("/data/categories/asset")
+    response = client.get("/data/categories/assets")
 
     assert response.status_code == 200
     response_data = response.json()
@@ -142,13 +140,14 @@ def test_asset_categories_empty_response():
 def test_categories_endpoints_unauthorized():
     """Test that endpoints require authentication."""
     # Don't override auth dependency - should fail
+    app.dependency_overrides.clear()
     app.dependency_overrides[get_categories_service] = override_categories_service
 
     client = TestClient(app)
 
     # Both endpoints should require authentication
-    expenditure_response = client.get("/data/categories/expenditure")
-    asset_response = client.get("/data/categories/asset")
+    expenditure_response = client.get("/data/categories/expenditures")
+    asset_response = client.get("/data/categories/assets")
 
     # Should return 401 or 422 depending on auth implementation
     assert expenditure_response.status_code in [401, 422]

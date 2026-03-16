@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from app.services.container import Container
+from app.core.container import Container
 
 
 def test_container_initialization():

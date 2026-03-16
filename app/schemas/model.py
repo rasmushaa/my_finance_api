@@ -3,7 +3,7 @@ from typing import Any, Dict, List
 import pandas as pd
 from pydantic import BaseModel, Field
 
-from .error import CustomHTTPException, ErrorCode
+from app.core.exceptions.model import ModelInputError
 
 CANONICAL_FEATURES = [
     "date",
@@ -48,17 +48,9 @@ class PredictRequest(BaseModel):
         missing = set(CANONICAL_FEATURES) - self.inputs.keys()
         extra = self.inputs.keys() - set(CANONICAL_FEATURES)
         if missing:
-            raise CustomHTTPException(
-                status_code=400,
-                error_code=ErrorCode.MODEL_FEATURES,
-                message=f"Missing required features: {missing}",
-            )
+            raise ModelInputError(details={"missing_features": list(missing)})
         if extra:
-            raise CustomHTTPException(
-                status_code=400,
-                error_code=ErrorCode.MODEL_FEATURES,
-                message=f"Unexpected features provided: {extra}",
-            )
+            raise ModelInputError(details={"unexpected_features": list(extra)})
 
 
 class PredictResponse(BaseModel):
@@ -107,8 +99,4 @@ class ModelStatusResponse(BaseModel):
     status: str = Field(..., description="The current loading status of the model.")
     is_ready: bool = Field(
         ..., description="Indicates whether the model is ready to serve predictions."
-    )
-    error_message: str = Field(
-        default="",
-        description="Any error message related to model loading or prediction.",
     )

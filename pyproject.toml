@@ -14,6 +14,7 @@ dependencies = [
     "polymodel==2.1.0",
     "pre-commit>=4.5.1",
     "python-jose>=3.5.0",
+    "requests>=2.31.0",
     "uvicorn>=0.40.0",
 ]
 
@@ -37,3 +38,8 @@ polymodel = { index = "private" }
 where = ["."]
 include = ["app*"]
 exclude = ["logs*", "model_artifacts*", "tests*", "scripts*"]
+
+[tool.bandit]
+# Exclude B105: hardcoded password string - for OAuth2 standard strings and error codes
+# Exclude B106: hardcoded password function argument - for OAuth2 "Bearer" token type
+skips = ["B105", "B106"]

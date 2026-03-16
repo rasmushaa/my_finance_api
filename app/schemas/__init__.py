@@ -6,6 +6,7 @@ from the submodules, making them available for use throughout the application, j
 importing from the schemas package itself.
 """
 
+from .auth import *
 from .database import *
 from .error import *
 from .model import *

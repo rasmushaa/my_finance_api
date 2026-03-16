@@ -21,19 +21,6 @@ load_env() {
 # Load environment variables
 load_env
 
-# Load model artifacts if MLflow is configured
-if [[ -n "$MLFLOW_TRACKING_URI" ]]; then
-    echo ""
-    echo "=== Loading Model Artifacts ==="
-    echo "Loading model artifacts for local development..."
-    ENV=${ENV:-"dev"} uv run --group dev python scripts/load_model_artifacts.py
-    echo "Model artifacts loaded successfully!"
-else
-    echo ""
-    echo "⚠️  MLflow not configured - skipping model loading"
-    echo "Set MLFLOW_TRACKING_URI and credentials in .env to enable model loading"
-fi
-
 # Generate auth tokens for testing
 echo ""
 echo "=== Generated Auth Tokens ==="
@@ -44,8 +31,26 @@ echo "User Token (role: user):"
 uv run python -c "
 import sys
 sys.path.append('.')
-from app.auth import issue_app_jwt
-user_token = issue_app_jwt('user@example.com', 'user')
+
+# Mock user client for token generation
+class MockUserClient:
+    def get_user_by_email(self, email):
+        users = {
+            'user@example.com': {'role': 'user'},
+            'admin@example.com': {'role': 'admin'}
+        }
+        return users.get(email)
+
+from app.services.jwt import AppJwtService
+import asyncio
+
+mock_client = MockUserClient()
+jwt_service = AppJwtService(mock_client)
+
+async def generate_token():
+    return await jwt_service.auth_with_delay('user@example.com')
+
+user_token = asyncio.run(generate_token())
 print(user_token)
 "
 
@@ -55,8 +60,26 @@ echo "Admin Token (role: admin):"
 uv run python -c "
 import sys
 sys.path.append('.')
-from app.auth import issue_app_jwt
-admin_token = issue_app_jwt('admin@example.com', 'admin')
+
+# Mock user client for token generation
+class MockUserClient:
+    def get_user_by_email(self, email):
+        users = {
+            'user@example.com': {'role': 'user'},
+            'admin@example.com': {'role': 'admin'}
+        }
+        return users.get(email)
+
+from app.services.jwt import AppJwtService
+import asyncio
+
+mock_client = MockUserClient()
+jwt_service = AppJwtService(mock_client)
+
+async def generate_token():
+    return await jwt_service.auth_with_delay('admin@example.com')
+
+admin_token = asyncio.run(generate_token())
 print(admin_token)
 "
 

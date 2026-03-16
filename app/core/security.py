@@ -1,69 +1,43 @@
-import os
-import time
-
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
-from app import schemas
+from app.core.exceptions.auth import MissingBearerTokenError
+from app.core.exceptions.base import AppError, ErrorCodes
+from app.services.jwt import APP_JWT_ALG, APP_JWT_SECRET
 
-APP_JWT_ALG = "HS256"
-APP_JWT_TTL_MIN = int(os.environ["APP_JWT_EXP_DELTA_MINUTES"])
-APP_JWT_SECRET = os.environ["APP_JWT_SECRET"]
-
-
-def issue_app_jwt(email: str, role: str) -> str:
-    """Issue a JWT for the given user email and role.
-
-    The token will be valid for a duration defined by APP_JWT_TTL_MIN.
-
-    Parameters
-    ----------
-    email : str
-        The email of the user for whom the token is being issued.
-    role : str
-        The role of the user (e.g., "user", "admin") to be included in the token claims.
-
-    Returns
-    -------
-    str
-        A JWT token as a string.
-    """
-    now = int(time.time())
-    payload = {
-        "sub": email,  # "sub" = subject (the user identifier in your app).
-        "role": role,  # App role used by protected endpoints.
-        "iat": now,  # "iat" = issued-at timestamp.
-        "exp": now + APP_JWT_TTL_MIN * 60,  # "exp" = expiration timestamp.
-        "iss": "my-finance-api",  # Issuer and audience are can seperate mutliple auth calls to the same oAuth2 provider.
-        "aud": "my-finance-api-users",
-    }
-    return jwt.encode(payload, APP_JWT_SECRET, algorithm=APP_JWT_ALG)
+security = HTTPBearer(
+    auto_error=False
+)  # HTTPBearer extracts `Authorization: Bearer <token>`
 
 
-security = HTTPBearer()  # HTTPBearer extracts `Authorization: Bearer <token>`.
-
-
-def require_user(creds: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+def require_user(
+    creds: HTTPAuthorizationCredentials | None = Depends(security),
+) -> dict:
     """Dependency function to require a valid JWT for protected endpoints.
 
     This function decodes the JWT and returns its payload if valid.
 
     Raises
     ------
-    HTTPException
+    AppError
         If the token is missing, invalid, or expired, a 401 Unauthorized error is raised
 
     Parameters
     ----------
-    creds : HTTPAuthorizationCredentials
+    creds : HTTPAuthorizationCredentials | None
         The credentials extracted from the Authorization header by HTTPBearer.
+        Can be None if no Authorization header is present.
 
     Returns
     -------
     dict
         The decoded JWT payload containing user information and claims.
     """
+    # Check if credentials are provided
+    if not creds:
+        raise MissingBearerTokenError()
+
     token = creds.credentials
     try:
         payload = jwt.decode(
@@ -74,9 +48,9 @@ def require_user(creds: HTTPAuthorizationCredentials = Depends(security)) -> dic
             issuer="my-finance-api",
         )
     except JWTError:
-        raise schemas.CustomHTTPException(
+        raise AppError(
             status_code=401,
-            error_code=schemas.ErrorCode.UNAUTHORIZED,
+            code=ErrorCodes.UNAUTHORIZED.value,
             message="Invalid or expired token",
         )
 
@@ -92,7 +66,7 @@ def require_role(role: str):
 
     Raises
     ------
-    HTTPException
+    AppError
         If the JWT is valid but does not contain the required role, a 403 Forbidden error is raised.
 
     Parameters
@@ -108,16 +82,11 @@ def require_role(role: str):
 
     def _checker(payload: dict = Depends(require_user)) -> dict:
         if payload.get("role") != role:
-            raise schemas.CustomHTTPException(
+            raise AppError(
                 status_code=403,
-                error_code=schemas.ErrorCode.FORBIDDEN,
-                message=f"Forbidden - Requires {role} role",
+                code=ErrorCodes.FORBIDDEN.value,
+                message=f"User does not have required role: {role}",
             )
         return payload
 
     return _checker
-
-
-# --------------- Dependency instances for endpoints ---------------
-require_admin = require_role("admin")
-require_login = require_user

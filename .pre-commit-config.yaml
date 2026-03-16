@@ -83,6 +83,8 @@ repos:
       # Helps ensure type safety in your codebase
       - id: mypy
         args: [--ignore-missing-imports, --no-strict-optional]
+        additional_dependencies:
+          - types-requests
 
 
   # Bandit - Security linter for Python

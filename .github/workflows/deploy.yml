@@ -107,6 +107,8 @@ jobs:
         export PYTHONPATH="${PYTHONPATH}:$(pwd)"
         export APP_JWT_EXP_DELTA_MINUTES="60"
         export APP_JWT_SECRET="test-jwt-secret-key"
+        export GOOGLE_OAUTH_CLIENT_ID="test-google-client-id"
+        export GOOGLE_OAUTH_CLIENT_SECRET="test-google-client-secret"
         export GCP_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
         export GCP_BQ_DATASET="${{ secrets.GCP_BQ_DATASET }}"
         export GCP_LOCATION="${{ secrets.GCP_LOCATION }}"
@@ -143,6 +145,8 @@ jobs:
         cat <<EOF > env-vars.yaml
         APP_JWT_SECRET: "${{ secrets.APP_JWT_SECRET }}"
         APP_JWT_EXP_DELTA_MINUTES: "${{ secrets.APP_JWT_EXP_DELTA_MINUTES }}"
+        GOOGLE_OAUTH_CLIENT_ID: "${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}"
+        GOOGLE_OAUTH_CLIENT_SECRET: "${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}"
         GCP_PROJECT_ID: "${{ secrets.GCP_PROJECT_ID }}"
         GCP_LOCATION: "${{ secrets.GCP_LOCATION }}"
         GCP_BQ_DATASET: "${{ secrets.GCP_BQ_DATASET }}"
@@ -157,6 +161,6 @@ jobs:
           --env-vars-file env-vars.yaml \
           --port 8080 \
           --cpu 1 \
-          --memory 2000Mi \
+          --memory 1000Mi \
           --max-instances 1 \
           --allow-unauthenticated

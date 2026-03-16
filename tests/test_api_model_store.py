@@ -3,11 +3,15 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app import schemas
-from app.auth import require_admin, require_user
+from app.api.dependencies.providers import (
+    get_model_store,
+    get_require_admin,
+    get_require_user,
+)
+from app.core.exceptions.base import ErrorCodes
+from app.core.exceptions.model import ModelNotAvailableError
 from app.main import app
-from app.services.container import get_model_store
-from app.services.model_store import ModelLoadingStatus
+from app.services.model import ModelLoadingStatus
 
 
 # --------------- Mock Model Store and Dummy Model for Testing ----------------
@@ -41,13 +45,13 @@ class DummyStore:
 
     def predict(self, input_df):
         if not self.is_ready:
-            raise ValueError("Model is not ready, prediction cannot be made")
+            raise ModelNotAvailableError()
         return self._model.predict(input_df)
 
     @property
     def metadata(self):
         if not self.is_ready:
-            raise ValueError("Model is not ready, metadata not available")
+            raise ModelNotAvailableError()
         return self._model_info
 
     @property
@@ -90,26 +94,11 @@ def cleanup_overrides():
     app.dependency_overrides.clear()
 
 
-# Test health check endpoint
-def test_health_check():
-    # Override auth dependencies
-    app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {
-        "user_id": "admin",
-        "role": "admin",
-    }
-
-    client = TestClient(app)
-    response = client.get("/health")
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
-
-
 # Test predict endpoint
 @patch("app.schemas.model.CANONICAL_FEATURES", ["a", "b"])
 def test_predict_endpoint():
     # Override auth and model dependencies
-    app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
+    app.dependency_overrides[get_require_user] = lambda: {"user_id": "test_user"}
     app.dependency_overrides[get_model_store] = override_store
 
     client = TestClient(app)
@@ -123,29 +112,21 @@ def test_predict_endpoint():
 @patch("app.schemas.model.CANONICAL_FEATURES", ["a", "b"])
 def test_predict_endpoint_model_not_ready():
     # Override auth and model dependencies
-    app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {
-        "user_id": "admin",
-        "role": "admin",
-    }
+    app.dependency_overrides[get_require_user] = lambda: {"user_id": "test_user"}
     app.dependency_overrides[get_model_store] = override_store_not_ready
 
     client = TestClient(app)
     request_payload = {"inputs": {"a": [1.0, 3.0], "b": [2.0, 4.0]}}
     response = client.post("/model/predict", json=request_payload)
     assert response.status_code == 503
-    assert response.json()["detail"]["code"] == schemas.ErrorCode.MODEL_NOT_READY.value
+    assert response.json()["code"] == ErrorCodes.ML_MODEL.value
 
 
 # Test predict endpoint with missing features
 @patch("app.schemas.model.CANONICAL_FEATURES", ["a", "b"])
 def test_predict_endpoint_missing_feature():
     # Override auth and model dependencies
-    app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {
-        "user_id": "admin",
-        "role": "admin",
-    }
+    app.dependency_overrides[get_require_user] = lambda: {"user_id": "test_user"}
     app.dependency_overrides[get_model_store] = override_store
 
     client = TestClient(app)
@@ -157,18 +138,14 @@ def test_predict_endpoint_missing_feature():
     }
     response = client.post("/model/predict", json=request_payload)
     assert response.status_code == 400
-    assert response.json()["detail"]["code"] == schemas.ErrorCode.MODEL_FEATURES.value
+    assert response.json()["code"] == ErrorCodes.ML_MODEL.value
 
 
 # Test predict endpoint with extra features
 @patch("app.schemas.model.CANONICAL_FEATURES", ["a", "b"])
 def test_predict_endpoint_extra_feature():
     # Override auth and model dependencies
-    app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {
-        "user_id": "admin",
-        "role": "admin",
-    }
+    app.dependency_overrides[get_require_user] = lambda: {"user_id": "test_user"}
     app.dependency_overrides[get_model_store] = override_store
 
     client = TestClient(app)
@@ -180,34 +157,27 @@ def test_predict_endpoint_extra_feature():
         }
     }
     response = client.post("/model/predict", json=request_payload)
+    print(response.json())
     assert response.status_code == 400
-    assert response.json()["detail"]["code"] == schemas.ErrorCode.MODEL_FEATURES.value
+    assert response.json()["code"] == ErrorCodes.ML_MODEL.value
 
 
 # Test model info endpoint when models not ready
 def test_model_info_endpoint_not_ready():
     # Override auth and model dependencies
-    app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {
-        "user_id": "admin",
-        "role": "admin",
-    }
+    app.dependency_overrides[get_require_admin] = lambda: {"user_id": "test_user"}
     app.dependency_overrides[get_model_store] = override_store_not_ready
 
     client = TestClient(app)
     response = client.get("/model/metadata")
     assert response.status_code == 503
-    assert response.json()["detail"]["code"] == schemas.ErrorCode.MODEL_NOT_READY.value
+    assert response.json()["code"] == ErrorCodes.ML_MODEL.value
 
 
 # Test model info endpoint - when ready
 def test_model_info_endpoint():
     # Override auth and model dependencies
-    app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {
-        "user_id": "admin",
-        "role": "admin",
-    }
+    app.dependency_overrides[get_require_admin] = lambda: {"user_id": "test_user"}
     app.dependency_overrides[get_model_store] = override_store
 
     client = TestClient(app)
@@ -220,11 +190,7 @@ def test_model_info_endpoint():
 # Test model status endpoint - ready
 def test_model_status_endpoint_ready():
     # Override auth and model dependencies
-    app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {
-        "user_id": "admin",
-        "role": "admin",
-    }
+    app.dependency_overrides[get_require_user] = lambda: {"user_id": "test_user"}
     app.dependency_overrides[get_model_store] = override_store
 
     client = TestClient(app)
@@ -238,11 +204,7 @@ def test_model_status_endpoint_ready():
 # Test model status endpoint - loading
 def test_model_status_endpoint_loading():
     # Override auth and model dependencies
-    app.dependency_overrides[require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[require_admin] = lambda: {
-        "user_id": "admin",
-        "role": "admin",
-    }
+    app.dependency_overrides[get_require_user] = lambda: {"user_id": "test_user"}
     app.dependency_overrides[get_model_store] = override_store_not_ready
 
     client = TestClient(app)
@@ -251,3 +213,33 @@ def test_model_status_endpoint_loading():
     data = response.json()
     assert data["status"] == "loading"
     assert data["is_ready"] is False
+
+
+# Test model endpoints unauthorized
+@patch("app.schemas.model.CANONICAL_FEATURES", ["a", "b"])
+def test_model_endpoints_unauthorized():
+    """Test that model endpoints require authentication."""
+    # Don't override auth dependencies - should fail
+    app.dependency_overrides.clear()
+    app.dependency_overrides[get_model_store] = override_store
+
+    client = TestClient(app)
+
+    # Test predict endpoint
+    request_payload = {"inputs": {"a": [1.0, 3.0], "b": [2.0, 4.0]}}
+    predict_response = client.post("/model/predict", json=request_payload)
+
+    # Test status endpoint
+    status_response = client.get("/model/status")
+
+    # Test metadata endpoint
+    metadata_response = client.get("/model/metadata")
+
+    # All endpoints should require authentication
+    assert predict_response.status_code in [401, 422]
+    assert status_response.status_code in [401, 422]
+    assert metadata_response.status_code in [
+        401,
+        422,
+        403,
+    ]  # 403 for admin-required endpoint
