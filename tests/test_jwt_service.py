@@ -7,9 +7,13 @@ from unittest.mock import patch
 import pytest
 from jose import jwt
 
-# Set environment variables BEFORE importing JWT service
+# Set test environment variables BEFORE importing JWT service
 os.environ["APP_JWT_SECRET"] = "test-secret-key-for-jwt-testing"
 os.environ["APP_JWT_EXP_DELTA_MINUTES"] = "60"
+
+# Test constants matching the environment variables above
+JWT_TEST_SECRET = "test-secret-key-for-jwt-testing"
+JWT_EXP_MINUTES = 60
 
 from app.core.exceptions.auth import UserNotFoundError
 from app.services.jwt import AppJwtService
@@ -54,9 +58,9 @@ def test_initialization_with_user_client(mock_user_client):
     service = AppJwtService(mock_user_client)
 
     assert service.user_client == mock_user_client
-    assert service._AppJwtService__secret_key == "test-secret-key-for-jwt-testing"
+    assert service._AppJwtService__secret_key == JWT_TEST_SECRET
     assert service._AppJwtService__algorithm == "HS256"
-    assert service._AppJwtService__token_expire_minutes == 60
+    assert service._AppJwtService__token_expire_minutes == JWT_EXP_MINUTES
 
 
 # Authentication Tests
@@ -72,7 +76,7 @@ async def test_successful_authentication_user_role(jwt_service):
     # Decode and verify token payload
     payload = jwt.decode(
         token,
-        "test-secret-key-for-jwt-testing",
+        JWT_TEST_SECRET,
         algorithms=["HS256"],
         audience="my-finance-api-users",
         issuer="my-finance-api",
@@ -93,7 +97,7 @@ async def test_successful_authentication_admin_role(jwt_service):
 
     payload = jwt.decode(
         token,
-        "test-secret-key-for-jwt-testing",
+        JWT_TEST_SECRET,
         algorithms=["HS256"],
         audience="my-finance-api-users",
         issuer="my-finance-api",
@@ -111,17 +115,18 @@ async def test_token_expiration_time(jwt_service):
 
     payload = jwt.decode(
         token,
-        "test-secret-key-for-jwt-testing",
+        JWT_TEST_SECRET,
         algorithms=["HS256"],
         audience="my-finance-api-users",
         issuer="my-finance-api",
     )
 
-    # Verify expiration is approximately 60 minutes (3600 seconds) from now
+    # Verify expiration is correct number of minutes from now
     exp_time = payload["exp"]
     iat_time = payload["iat"]
+    expected_duration = JWT_EXP_MINUTES * 60  # Convert minutes to seconds
 
-    assert exp_time - iat_time == 3600  # 60 minutes * 60 seconds
+    assert exp_time - iat_time == expected_duration
     assert iat_time >= start_time
     assert iat_time <= int(time.time()) + 1  # Allow 1 second tolerance
 

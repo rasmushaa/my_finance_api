@@ -120,14 +120,6 @@ jobs:
     - name: Run tests
       run: |
         export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-        # Load all variables from env-vars.yaml (parse YAML format)
-        while IFS=': ' read -r key value; do
-          if [[ ! "$key" =~ ^#.* && -n "$key" ]]; then
-            # Remove quotes from value
-            clean_value=$(echo "$value" | sed 's/^"//;s/"$//')
-            export "$key=$clean_value"
-          fi
-        done < env-vars.yaml
         uv run pytest
 
     - name: Load model artifacts
