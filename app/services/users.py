@@ -111,23 +111,19 @@ class UsersService:
         # Sanitize the email for SQL safety
         sanitized_email = self._sanitize_email(email.strip())
 
-        try:
-            sql = f"""
-            SELECT
-                UserName as email,
-                Role as role
-            FROM
-                {self.db_client.dataset}.d_credentials
-            WHERE
-                UserName = '{sanitized_email}'
-            """  # nosec B608
-            df = self.db_client.sql_to_pandas(sql)
-            logger.debug(f"Fetched user information from BigQuery:\n{df}")
+        # Client handles errors
+        sql = f"""
+        SELECT
+            UserName as email,
+            Role as role
+        FROM
+            {self.db_client.dataset}.d_credentials
+        WHERE
+            UserName = '{sanitized_email}'
+        """  # nosec B608
+        df = self.db_client.sql_to_pandas(sql)
+        logger.debug(f"Fetched user information from BigQuery:\n{df}")
 
-            # Return the result as dict or empty dict if no results
-            info = df.to_dict(orient="records")
-            return info[0] if info else {}
-
-        except Exception as e:
-            logger.error(f"Database error while fetching user {email}: {str(e)}")
-            return {}
+        # Return the result as dict or empty dict if no results
+        info = df.to_dict(orient="records")
+        return info[0] if info else {}
