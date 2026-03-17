@@ -27,11 +27,9 @@ COPY uv.lock* /app/
 # The index is already defined in pyproject.toml as "private"
 RUN --mount=type=secret,id=oauth_token \
     --mount=type=cache,target=/root/.cache/uv \
-    set -eux; \
+    set -eu; \
     TOKEN="$(cat /run/secrets/oauth_token)"; \
-    export UV_INDEX_PRIVATE_USERNAME="oauth2accesstoken"; \
-    export UV_INDEX_PRIVATE_PASSWORD="${TOKEN}"; \
-    uv sync --no-dev --no-install-project
+    UV_INDEX_PRIVATE_USERNAME="oauth2accesstoken" UV_INDEX_PRIVATE_PASSWORD="${TOKEN}" uv sync --no-dev --no-install-project
 
 # Now copy the application code and artifacts
 COPY app /app/app/
