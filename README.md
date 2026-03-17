@@ -5,7 +5,7 @@
 A modern FastAPI-based REST API for financial data management with integrated ML model serving capabilities. Built with clean architecture principles, comprehensive authentication.
 
 [![Docs](https://img.shields.io/badge/Swagger-Docs-blue.svg)](https://my-finance-api-prod-109245832287.europe-north1.run.app/docs)
-[![Tests](https://github.com/rasmusgrowup/my_finance_api/actions/workflows/deploy.yml/badge.svg)](https://github.com/rasmusgrowup/my_finance_api/actions/workflows/deploy.yml)
+[![Tests](https://github.com/rasmushaa/my_finance_api/actions/workflows/deploy.yml/badge.svg)](https://github.com/rasmushaa/my_finance_api/actions/workflows/deploy.yml)
 
 ## Architecture
 

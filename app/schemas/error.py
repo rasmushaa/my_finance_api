@@ -9,14 +9,10 @@ class ErrorResponse(BaseModel):
     This model standardizes the format of error responses,
     making it easier for clients to parse and handle errors consistently.
 
-    Attributes
-    ----------
-    code : str
-        A machine-readable error code that can be used for programmatic error handling by clients.
-    message : str
-        A human-readable error message describing the issue.
-    details : Optional[Dict[str, Any]]
-        Additional details about the error (e.g., validation errors, stack trace) that can be included in the response for debugging purposes.
+    ## Attributes
+    - **code** (str): A machine-readable error code that can be used for programmatic error handling by clients.
+    - **message** (str): A human-readable error message describing the issue.
+    - **details** (Dict[str, Any]): Additional details about the error (e.g., validation errors, stack trace) that can be included in the response for debugging purposes.
     """
 
     code: str = "UNKNOWN_ERROR"

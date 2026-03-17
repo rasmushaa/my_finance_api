@@ -15,8 +15,6 @@ CANONICAL_FEATURES = [
 class PredictRequest(BaseModel):
     """A Pydantic model for the prediction request payload.
 
-    Details
-    -------
     This model expects a dictionary of input features matching the canonical features list.
     The `to_dataframe` method converts this dictionary into a pandas DataFrame
     with the specified columns needed for prediction.
@@ -33,10 +31,8 @@ class PredictRequest(BaseModel):
 
         Input features are validated before conversion.
 
-        Returns
-        -------
-        pd.DataFrame
-            A DataFrame constructed from the input dictionary.
+        ## Returns
+        - **pd.DataFrame**: A DataFrame constructed from the input dictionary.
         """
         self.__validate_features()
         sorted_inputs = {col: self.inputs[col] for col in CANONICAL_FEATURES}

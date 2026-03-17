@@ -20,24 +20,26 @@ async def auth_google_code(
     OAuth flow. It uses the GoogleOAuthService to exchange the code for an access token,
     retrieves the user's profile information, and returns a minted JWT for authentication in the application.
 
-    **Parameters:**
+    ## Parameters
     - **request** (GoogleCodeExchangeRequest): The request body containing the authorization code.
     - **google_oauth_service** (GoogleOAuthService): The service used to handle Google OAuth operations.
     - **jwt_service** (JWTService): The service used to handle JWT operations.
 
-    **Returns:**
+    ## Returns
     - **GoogleCodeExchangeResponse**: The response containing the access token and user info.
 
-    **Raises:**
+    ## Raises
     - **HTTPException**: If the code exchange fails or if the provided code is invalid.
     """
     info = google_oauth_service.exchange_code_for_id_token(
         request.code, request.redirect_uri
     )
 
-    jwt_token = await jwt_service.auth_with_delay(email=info["sub"])
+    jwt_token = await jwt_service.auth_with_delay(email=info["email"])
 
     return GoogleCodeExchangeResponse(
-        access_token=jwt_token,
+        encoded_token=jwt_token,
         token_type="Bearer",
+        user_name=info.get("name", ""),
+        user_picture_url=info.get("picture", ""),
     )

@@ -91,4 +91,4 @@ echo ""
 
 # Run the FastAPI application using Uvicorn
 echo "Starting FastAPI application with Uvicorn..."
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8081 --reload
