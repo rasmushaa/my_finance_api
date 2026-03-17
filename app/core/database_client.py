@@ -3,6 +3,10 @@ import os
 
 import pandas as pd
 import pandas_gbq
+from google.api_core.exceptions import GoogleAPICallError
+from google.cloud.exceptions import Forbidden, NotFound
+
+from app.core.exceptions.database import DatabaseInternalError
 
 logger = logging.getLogger(__name__)
 
@@ -51,16 +55,38 @@ class GoogleCloudAPI:
         Returns
         -------
         df : DataFrame
+
+        Raises
+        ------
+        Forbidden
+            When access is denied to BigQuery resources
+        NotFound
+            When the specified table or dataset does not exist
+        GoogleAPICallError
+            For other BigQuery API errors
         """
         logger.debug(f"Running SQL query:\n{sql}")
-        df = pandas_gbq.read_gbq(
-            sql,
-            project_id=self.__project_id,
-            location=self.__location,
-            progress_bar_type=None,
-        )  # Use the system default credentials/Cloud Run SA
-        logger.debug(f"Query result:\n{df}")
-        return df
+        try:
+            df = pandas_gbq.read_gbq(
+                sql,
+                project_id=self.__project_id,
+                location=self.__location,
+                progress_bar_type=None,
+            )  # Use the system default credentials/Cloud Run SA
+            logger.debug(f"Query result:\n{df}")
+            return df
+
+        except Forbidden as e:
+            logger.error(f"BigQuery access denied: {str(e)}")
+            raise DatabaseInternalError(details={"error": str(e)})
+
+        except NotFound as e:
+            logger.error(f"BigQuery resource not found: {str(e)}")
+            raise DatabaseInternalError(details={"error": str(e)})
+
+        except GoogleAPICallError as e:
+            logger.error(f"BigQuery API error: {str(e)}")
+            raise DatabaseInternalError(details={"error": str(e)})
 
     def write_pandas_to_table(self, df: pd.DataFrame, table_name: str):
         """Push a DataFrame to BigQuery.
