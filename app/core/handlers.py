@@ -1,8 +1,12 @@
+import logging
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.core.exceptions.base import AppError
 from app.schemas.error import ErrorResponse
+
+logger = logging.getLogger(__name__)
 
 
 def app_error_handler(request: Request, exc: AppError) -> JSONResponse:

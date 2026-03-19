@@ -29,7 +29,9 @@ async def lifespan(app: FastAPI):
     tasks = []
     for service in startup_services:
         if hasattr(service, "load"):  # Protocol check for load method
-            task = asyncio.create_task(service.load())
+            task = asyncio.create_task(
+                service.load()
+            )  # TODO: remove threading. Not supported on cloud run (4min is max)
             tasks.append(task)
             logger.info(f"Started background task for {service.__class__.__name__}")
 
@@ -51,5 +53,5 @@ app = FastAPI(title="MyFinance ML API", lifespan=lifespan)
 for router in routers:
     app.include_router(router)
 
-# Handlers
+# The main error handler
 app.add_exception_handler(AppError, app_error_handler)
