@@ -72,7 +72,7 @@ class UserNotAuthorizedError(AppError):
 
 
 class AuthRateLimitExceededError(AppError):
-    def __init__(self, cooldown_seconds: int):
+    def __init__(self, cooldown_seconds: int, details: dict | None = None):
         super().__init__(
             status_code=429,
             code=ErrorCodes.RATE_LIMIT_EXCEEDED.value,

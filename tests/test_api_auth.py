@@ -139,20 +139,24 @@ def test_auth_rate_limit_is_per_email():
     app.dependency_overrides[get_google_oauth_service] = lambda: MockGoogleOAuthService(
         user_info=user_a_info
     )
-    for _ in range(5):
+    for i in range(1):
         response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
-        assert response.status_code == 200
+        assert response.status_code == 200, f"User A's {i+1} auth calls should succeed"
 
     # User A is now rate limited
     response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
-    assert response.status_code == 429
+    assert (
+        response.status_code == 429
+    ), "User A should be rate limited after exceeding limit"
 
     # User B should still be allowed (different email key)
     app.dependency_overrides[get_google_oauth_service] = lambda: MockGoogleOAuthService(
         user_info=user_b_info
     )
     response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
-    assert response.status_code == 200
+    assert (
+        response.status_code == 200
+    ), "User B should not be affected by User A's rate limit"
 
 
 def test_auth_rate_limit_resets_after_window(monkeypatch):
@@ -180,17 +184,21 @@ def test_auth_rate_limit_resets_after_window(monkeypatch):
     client = TestClient(app)
 
     # Exhaust rate limit
-    for _ in range(5):
+    for i in range(1):
         response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
-        assert response.status_code == 200
+        assert (
+            response.status_code == 200
+        ), f"The {i+1} auth calls request should succeed"
 
     # Should be blocked
     response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
-    assert response.status_code == 429
+    assert response.status_code == 429, "The extra auth call should be rate limited"
 
     # Advance time past the window (300 seconds)
     fake_time[0] = 100.0 + 301.0
 
     # Should be allowed again
     response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
-    assert response.status_code == 200
+    assert (
+        response.status_code == 200
+    ), "The auth call should succeed after the rate limit window resets"

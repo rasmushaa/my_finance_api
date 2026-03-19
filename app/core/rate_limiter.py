@@ -40,7 +40,6 @@ class EmailRateLimiter:
         self._requests[key] = [t for t in timestamps if t > cutoff]
 
         if len(self._requests[key]) >= self.max_requests:
-            logger.warning(f"Rate limit exceeded for key: {key}")
             return False
 
         self._requests[key].append(now)

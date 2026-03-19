@@ -74,11 +74,11 @@ class GoogleOAuthService:
         response = requests.post(self.token_uri, data=data, timeout=15)
 
         if response.status_code != 200:
-            logger.error(f"Google token exchange failed")
+            logger.debug(f"Google token exchange failed")
             raise CodeExchangeError()
 
         if "id_token" not in response.json():
-            logger.error(f"Google token exchange response missing id_token")
+            logger.debug(f"Google token exchange response missing id_token")
             raise MissingIdTokenError()
 
         id_token = response.json()["id_token"]
@@ -92,11 +92,11 @@ class GoogleOAuthService:
             "accounts.google.com",
             "https://accounts.google.com",
         ):
-            logger.error(f"Invalid token issuer: {info.get('iss')}")
+            logger.debug(f"Invalid token issuer: {info.get('iss')}")
             raise InvalidIdTokenError()
 
         if not info.get("email"):
-            logger.error(f"Google ID token missing email")
+            logger.debug(f"Google ID token missing email")
             raise MissingEmailError()
 
         return info
