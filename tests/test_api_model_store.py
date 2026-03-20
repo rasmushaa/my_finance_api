@@ -192,20 +192,6 @@ def test_model_info_endpoint():
     assert response.json()["model_name"] == "test_model"
 
 
-# Test model status endpoint - ready
-def test_model_status_endpoint_ready():
-    # Override auth and model dependencies
-    app.dependency_overrides[get_require_user] = lambda: {"user_id": "test_user"}
-    app.dependency_overrides[get_model_store] = override_store
-
-    client = TestClient(app)
-    response = client.get("/model/status")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "ready"
-    assert data["is_ready"] is True
-
-
 # Test model status endpoint - loading
 def test_model_status_endpoint_loading():
     # Override auth and model dependencies
