@@ -4,11 +4,11 @@ This module defines the API router for health check endpoints, which are used to
 that the application is running and responsive.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 router = APIRouter(prefix="/health", tags=["health"])
 
 
 @router.get("/")
-def health():
+def health(request: Request):
     return {"status": "ok"}

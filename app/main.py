@@ -11,7 +11,7 @@ from app.core.exceptions.base import AppError
 from app.core.handlers import app_error_handler
 from app.core.setup_logging import setup_logging
 
-setup_logging(level=logging.DEBUG)
+setup_logging(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -48,5 +48,5 @@ app = FastAPI(title="MyFinance ML API", lifespan=lifespan)
 for router in routers:
     app.include_router(router)
 
-# Handlers
+# The main error handler
 app.add_exception_handler(AppError, app_error_handler)

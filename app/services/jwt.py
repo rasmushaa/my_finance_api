@@ -1,11 +1,9 @@
-import asyncio
 import logging
 import os
 import time
 from dataclasses import dataclass
 from typing import Protocol
 
-import numpy as np
 from jose import jwt
 
 from app.core.exceptions.auth import InvalidIdTokenError, UserNotFoundError
@@ -67,12 +65,11 @@ class AppJwtService:
         """Public property to access JWT configuration."""
         return self.__config
 
-    async def auth_with_delay(self, email: str) -> str:
+    def authenticate(self, email: str) -> str:
         """Authenticate user and issue app JWT.
 
         The email is matched against the user database.
-        If the user is not found,
-        a random delay is introduced before raising an exception to mitigate timing attacks.
+        Rate limiting is handled at the router level using the email as key.
 
         Parameters
         ----------
@@ -86,7 +83,6 @@ class AppJwtService:
         """
         user = self.user_client.get_user_by_email(email)
         if not user:
-            await asyncio.sleep(np.random.uniform(3.0, 6.0))
             raise UserNotFoundError()
         return self.__issue_app_jwt(email=email, role=user["role"])
 
