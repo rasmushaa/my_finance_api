@@ -11,7 +11,7 @@ from enum import Enum
 class ErrorCodes(Enum):
     """Standardized error codes for API responses."""
 
-    ML_MODEL = "ML_MODEL_ERROR"
+    ML_ERROR = "ML_ERROR"
     AUTH = "AUTH_ERROR"
     UNAUTHORIZED = "UNAUTHORIZED"
     FORBIDDEN = "FORBIDDEN"

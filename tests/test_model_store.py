@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app.services.model import ModelLoadingStatus, ModelService
+from app.core.exceptions.model import ModelArtifactsError, ModelInputError
+from app.services.model import ModelService
 
 
 # --------------------------- Mock Classes for MlFlow --------------------------
@@ -34,22 +35,11 @@ class MockModel:
 
 
 # --------------------------- Test Cases for ModelService --------------------------
-def test_initialize_model_store():
-    """Smoke test to verify that ModelService initializes with correct default
-    values."""
-    store = ModelService()
-    assert store.status == ModelLoadingStatus.NOT_STARTED
-    assert not store.is_ready
-
-
 @patch("app.services.model.CANONICAL_FEATURES", ["a", "b"])
 @patch("app.services.model.mlflow.pyfunc.load_model")
 @patch("app.services.model.ModelService._load_model_metadata")
 @patch("app.services.model.ModelService._validate_model_package_version")
-@pytest.mark.asyncio
-async def test_load_model(
-    mock_validate_package, mock_load_model_metadata, mock_load_model
-):
+def test_load_model(mock_validate_package, mock_load_model_metadata, mock_load_model):
     """Test the async load method of ModelService with successful loading scenario."""
     # Setup mock return values
     mock_validate_package.return_value = None  # Skip validation
@@ -57,14 +47,9 @@ async def test_load_model(
     mock_load_model.return_value = MockModel(signature=["a", "b"])
 
     store = ModelService()
-    await store.load()  # Call async method properly
-
-    print(f"Status: {store.status}")
-    print(f"Is Ready: {store.is_ready}")
+    store.load()
     print(f"Metadata: {store.metadata}")
 
-    assert store.is_ready
-    assert store.status == ModelLoadingStatus.READY
     assert store.metadata == {"version": "1", "alias": "prod"}
     assert store.predict(pd.DataFrame({"a": [1], "b": [2]})) == [
         0
@@ -75,8 +60,7 @@ async def test_load_model(
 @patch("app.services.model.ModelService._validate_model_package_version")
 @patch("app.services.model.ModelService._load_model_metadata")
 @patch("app.services.model.mlflow.pyfunc.load_model")
-@pytest.mark.asyncio
-async def test_load_model_signature_failure(
+def test_load_model_signature_failure(
     mock_load_model, mock_load_metadata, mock_validate_package
 ):
     # Setup mocks
@@ -86,9 +70,9 @@ async def test_load_model_signature_failure(
         signature=["a", "c"]
     )  # Missing required feature 'b'
 
-    with pytest.raises(ValueError, match="Model requires features not in canonical"):
+    with pytest.raises(ModelArtifactsError, match="missing or invalid"):
         store = ModelService()
-        await store.load()
+        store.load()
 
 
 # Tests for _validate_model_package_version method
@@ -123,8 +107,7 @@ def test_validate_model_package_version_mismatch(mock_exists, mock_version):
     with patch("builtins.open", mock_open(read_data=requirements_content)):
         store = ModelService()
         with pytest.raises(
-            ValueError,
-            match="Incompatible polymodel version: model requires 2.0.0, but runtime has 1.2.3",
+            ModelArtifactsError,
         ):
             store._validate_model_package_version()
 
@@ -140,7 +123,27 @@ def test_validate_model_package_version_runtime_error(mock_exists, mock_version)
 
     with patch("builtins.open", mock_open(read_data=requirements_content)):
         store = ModelService()
-        with pytest.raises(
-            ValueError, match="Could not determine runtime polymodel version"
-        ):
+        with pytest.raises(ModelArtifactsError):
             store._validate_model_package_version()
+
+
+@patch("app.services.model.CANONICAL_FEATURES", ["a", "b"])
+@patch("app.services.model.ModelService._validate_model_package_version")
+@patch("app.services.model.ModelService._load_model_metadata")
+@patch("app.services.model.mlflow.pyfunc.load_model")
+def test_predict_mismatching_columns(
+    mock_load_model, mock_load_metadata, mock_validate_package
+):
+    """Test that predict raises an error when input DataFrame has mismatching column
+    names."""
+    # Setup mocks
+    mock_validate_package.return_value = None
+    mock_load_metadata.return_value = {"version": "1"}
+    mock_load_model.return_value = MockModel(signature=["a", "b"])
+
+    store = ModelService()
+    store.load()
+
+    # Try to predict with mismatching column names
+    with pytest.raises(ModelInputError):
+        store.predict(pd.DataFrame({"a": [1], "c": [2]}))

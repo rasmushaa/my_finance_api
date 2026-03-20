@@ -4,8 +4,9 @@
 # with support for private Python packages from Google Artifact Registry.
 #
 # BRANCH LOGIC:
-# - main branch  → deploys to production environment (ENV=prod)
-# - stg branch   → deploys to staging environment (ENV=stg)
+# - main branch         → runs tests + deploys to production environment (ENV=prod)
+# - stg branch          → runs tests + deploys to staging environment (ENV=stg)
+# - feature/* branches  → runs tests only (no deployment)
 #
 # PRIVATE PACKAGE AUTHENTICATION:
 # Uses Google Cloud OAuth tokens to authenticate with private Python package registry.
@@ -48,6 +49,7 @@ on:
     branches:
       - main
       - stg
+      - 'feature/*'
 
 jobs:
   build-and-deploy:
@@ -64,9 +66,15 @@ jobs:
         if [ "${{ github.ref_name }}" == "main" ]; then
           echo "ENV=prod" >> $GITHUB_ENV
           echo "IMAGE_URI=${{ secrets.GCP_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-finance/fastapi-prod:latest" >> $GITHUB_ENV
-        else
+          echo "SHOULD_DEPLOY=true" >> $GITHUB_ENV
+        elif [ "${{ github.ref_name }}" == "stg" ]; then
           echo "ENV=stg" >> $GITHUB_ENV
           echo "IMAGE_URI=${{ secrets.GCP_LOCATION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/my-finance/fastapi-stg:latest" >> $GITHUB_ENV
+          echo "SHOULD_DEPLOY=true" >> $GITHUB_ENV
+        else
+          # Feature branch - no deployment needed
+          echo "ENV=dev" >> $GITHUB_ENV
+          echo "SHOULD_DEPLOY=false" >> $GITHUB_ENV
         fi
 
     - name: Checkout code
@@ -92,6 +100,7 @@ jobs:
       uses: astral-sh/setup-uv@v4
 
     - name: Create env-vars.yaml
+      if: env.SHOULD_DEPLOY == 'true'
       run: |
         cat <<EOF > env-vars.yaml
         APP_JWT_SECRET: "${{ secrets.APP_JWT_SECRET }}"
@@ -123,6 +132,7 @@ jobs:
         uv run pytest
 
     - name: Load model artifacts
+      if: env.SHOULD_DEPLOY == 'true'
       run: |
         export MLFLOW_TRACKING_URI="${{ secrets.MLFLOW_TRACKING_URI }}"
         export MLFLOW_TRACKING_USERNAME="${{ secrets.MLFLOW_TRACKING_USERNAME }}"
@@ -131,6 +141,7 @@ jobs:
         uv run python scripts/load_model_artifacts.py
 
     - name: Build and Push Docker image
+      if: env.SHOULD_DEPLOY == 'true'
       run: |
         TOKEN=$(gcloud auth application-default print-access-token)
         # Create temp file for BuildKit secret (more reliable than piping)
@@ -148,6 +159,7 @@ jobs:
         docker push "${{ env.IMAGE_URI }}"
 
     - name: Deploy Cloud Run Job
+      if: env.SHOULD_DEPLOY == 'true'
       run: |
         gcloud run deploy my-finance-api-${{ env.ENV }} \
           --image "${{ env.IMAGE_URI }}" \

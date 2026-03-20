@@ -10,11 +10,11 @@ from app.services.users import UsersService
 
 # ------------------- Protocols for Type Hinting ------------------
 class StartupService(Protocol):
-    async def load(self) -> None: ...
+    def load(self) -> None: ...
 
 
 class ShutdownService(Protocol):
-    async def cleanup(self) -> None: ...
+    def cleanup(self) -> None: ...
 
 
 # ------------------ Dependency Injection Container ------------------
