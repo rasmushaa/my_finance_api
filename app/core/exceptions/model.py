@@ -1,22 +1,12 @@
 from .base import AppError, ErrorCodes
 
 
-class ModelNotAvailableError(AppError):
-    def __init__(self, details: dict = {}):
-        super().__init__(
-            status_code=503,
-            code=ErrorCodes.ML_MODEL.value,
-            message="Model has not been loaded yet. Please try again later.",
-            details=details,
-        )
-
-
-class ModelFileNotFoundError(AppError):
+class ModelArtifactsError(AppError):
     def __init__(self, details: dict = {}):
         super().__init__(
             status_code=500,
-            code=ErrorCodes.ML_MODEL.value,
-            message="Model file not found. Please check the model artifacts path.",
+            code=ErrorCodes.ML_ERROR.value,
+            message="Model artifacts are missing or invalid.",
             details=details,
         )
 
@@ -25,7 +15,7 @@ class ModelInputError(AppError):
     def __init__(self, details: dict = {}):
         super().__init__(
             status_code=400,
-            code=ErrorCodes.ML_MODEL.value,
-            message="Invalid input features provided for prediction.",
+            code=ErrorCodes.ML_ERROR.value,
+            message="Invalid input features provided.",
             details=details,
         )

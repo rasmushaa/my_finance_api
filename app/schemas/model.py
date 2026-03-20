@@ -83,16 +83,3 @@ class ModelMetadataResponse(BaseModel):
         ..., description="The list of features used by the model."
     )
     model_architecture: str = Field(..., description="The architecture of the model.")
-
-
-class ModelStatusResponse(BaseModel):
-    """A Pydantic model for the model status response payload.
-
-    This model defines the structure of the status information returned by the
-    /model/status endpoint.
-    """
-
-    status: str = Field(..., description="The current loading status of the model.")
-    is_ready: bool = Field(
-        ..., description="Indicates whether the model is ready to serve predictions."
-    )
