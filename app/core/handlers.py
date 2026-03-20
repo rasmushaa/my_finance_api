@@ -20,7 +20,7 @@ def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     """
 
     logger.error(
-        f"{exc.code}: {exc.message} - Context: {extract_client_context(request)}"
+        f"{exc.code}: {exc.message} - Details:{exc.details} - Context: {extract_client_context(request)}"
     )
 
     error = ErrorResponse(

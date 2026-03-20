@@ -68,9 +68,8 @@ def auth_google_code(
 
         email = info["email"]  # Rate limit by validated google email
         if not _auth_limiter.check(email):
-            logger.warning(f"Auth rate limit exceeded for email: {email}")
             raise AuthRateLimitExceededError(
-                cooldown_seconds=_auth_limiter.window_seconds
+                email=email, cooldown_seconds=_auth_limiter.window_seconds
             )
 
         jwt_token = jwt_service.authenticate(email=email)
