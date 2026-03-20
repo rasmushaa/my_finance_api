@@ -69,3 +69,13 @@ class UserNotAuthorizedError(AppError):
             message="User does not have required permissions",
             # Do not include sensitive details in the error response
         )
+
+
+class AuthRateLimitExceededError(AppError):
+    def __init__(self, cooldown_seconds: int, details: dict | None = None):
+        super().__init__(
+            status_code=429,
+            code=ErrorCodes.RATE_LIMIT_EXCEEDED.value,
+            message=f"Too many authentication attempts. Please wait {cooldown_seconds} seconds.",
+            details={"cooldown_seconds": cooldown_seconds},
+        )

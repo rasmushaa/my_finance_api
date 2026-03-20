@@ -1,4 +1,6 @@
-from fastapi import Depends
+from typing import Any, Dict
+
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.container import container
@@ -70,3 +72,33 @@ def require_role(role: str):
         return payload
 
     return _checker
+
+
+def extract_client_context(request: Request) -> Dict[str, Any]:
+    """Extract client information from a request for security logging.
+
+    Collects network, header, and request metadata useful for
+    identifying and logging potentially harmful behaviour.
+
+    Parameters
+    ----------
+    request : Request
+        The incoming FastAPI request object.
+
+    Returns
+    -------
+    Dict[str, Any]
+        Client context including IP addresses, user-agent, and request details.
+    """
+    return {
+        "client_host": request.client.host if request.client else None,
+        "client_port": request.client.port if request.client else None,
+        "x_forwarded_for": request.headers.get("x-forwarded-for"),
+        "x_real_ip": request.headers.get("x-real-ip"),
+        "user_agent": request.headers.get("user-agent"),
+        "referer": request.headers.get("referer"),
+        "origin": request.headers.get("origin"),
+        "method": request.method,
+        "path": str(request.url.path),
+        "query_params": str(request.url.query) if request.url.query else None,
+    }

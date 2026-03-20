@@ -42,15 +42,11 @@ class MockUserClient:
         return users.get(email)
 
 from app.services.jwt import AppJwtService
-import asyncio
 
 mock_client = MockUserClient()
 jwt_service = AppJwtService(mock_client)
 
-async def generate_token():
-    return await jwt_service.auth_with_delay('user@example.com')
-
-user_token = asyncio.run(generate_token())
+user_token = jwt_service.authenticate('user@example.com')
 print(user_token)
 "
 
@@ -71,15 +67,11 @@ class MockUserClient:
         return users.get(email)
 
 from app.services.jwt import AppJwtService
-import asyncio
 
 mock_client = MockUserClient()
 jwt_service = AppJwtService(mock_client)
 
-async def generate_token():
-    return await jwt_service.auth_with_delay('admin@example.com')
-
-admin_token = asyncio.run(generate_token())
+admin_token = jwt_service.authenticate('admin@example.com')
 print(admin_token)
 "
 

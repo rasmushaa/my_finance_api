@@ -1,6 +1,4 @@
-import asyncio
 import logging
-from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
@@ -13,25 +11,24 @@ from app.core.exceptions.base import AppError
 from app.core.handlers import app_error_handler
 from app.core.setup_logging import setup_logging
 
-setup_logging(level=logging.DEBUG)
+setup_logging(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------- Lifespan ---------------------------
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+def lifespan(app: FastAPI):
     logger.info("Starting up application...")
 
     # Get services that need startup tasks from container
     startup_services = get_services_requiring_startup()
 
-    # Start background tasks for each service
-    tasks = []
+    # Run startup tasks
+    # Note: this used to be async thredads, but Cloud Run (with request based billing) does not process background threads.
+    # The Cloud Run has 4min maximum startup time, so all startup tasks must be completed within that time frame.
     for service in startup_services:
         if hasattr(service, "load"):  # Protocol check for load method
-            task = asyncio.create_task(service.load())
-            tasks.append(task)
-            logger.info(f"Started background task for {service.__class__.__name__}")
+            logger.info(f"Loading {service.__class__.__name__}")
+            service.load()
 
     yield
 
@@ -40,8 +37,8 @@ async def lifespan(app: FastAPI):
     shutdown_services = get_services_requiring_shutdown()
     for shutdown_service in shutdown_services:
         if hasattr(shutdown_service, "cleanup"):
-            await shutdown_service.cleanup()
-            logger.info(f"Cleaned up {shutdown_service.__class__.__name__}")
+            logger.info(f"Cleaning up {shutdown_service.__class__.__name__}")
+            shutdown_service.cleanup()
 
 
 # ---------------------------- Application ---------------------------
@@ -51,5 +48,5 @@ app = FastAPI(title="MyFinance ML API", lifespan=lifespan)
 for router in routers:
     app.include_router(router)
 
-# Handlers
+# The main error handler
 app.add_exception_handler(AppError, app_error_handler)

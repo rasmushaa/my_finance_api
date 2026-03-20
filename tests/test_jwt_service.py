@@ -2,7 +2,6 @@
 
 import os
 import time
-from unittest.mock import patch
 
 import pytest
 from jose import jwt
@@ -64,10 +63,9 @@ def test_initialization_with_user_client(mock_user_client):
 
 
 # Authentication Tests
-@pytest.mark.asyncio
-async def test_successful_authentication_user_role(jwt_service):
+def test_successful_authentication_user_role(jwt_service):
     """Test successful authentication for user role."""
-    token = await jwt_service.auth_with_delay("user@example.com")
+    token = jwt_service.authenticate("user@example.com")
 
     # Verify token is a string
     assert isinstance(token, str)
@@ -90,10 +88,9 @@ async def test_successful_authentication_user_role(jwt_service):
     assert "exp" in payload
 
 
-@pytest.mark.asyncio
-async def test_successful_authentication_admin_role(jwt_service):
+def test_successful_authentication_admin_role(jwt_service):
     """Test successful authentication for admin role."""
-    token = await jwt_service.auth_with_delay("admin@example.com")
+    token = jwt_service.authenticate("admin@example.com")
 
     payload = jwt.decode(
         token,
@@ -107,11 +104,10 @@ async def test_successful_authentication_admin_role(jwt_service):
     assert payload["role"] == "admin"
 
 
-@pytest.mark.asyncio
-async def test_token_expiration_time(jwt_service):
+def test_token_expiration_time(jwt_service):
     """Test JWT token has correct expiration time."""
     start_time = int(time.time())
-    token = await jwt_service.auth_with_delay("user@example.com")
+    token = jwt_service.authenticate("user@example.com")
 
     payload = jwt.decode(
         token,
@@ -132,39 +128,9 @@ async def test_token_expiration_time(jwt_service):
 
 
 # Security Features Tests
-@pytest.mark.asyncio
-async def test_user_not_found_raises_exception(empty_user_client):
+def test_user_not_found_raises_exception(empty_user_client):
     """Test authentication fails for non-existent user."""
     service = AppJwtService(empty_user_client)
 
     with pytest.raises(UserNotFoundError):
-        await service.auth_with_delay("nonexistent@example.com")
-
-
-@pytest.mark.asyncio
-async def test_timing_attack_protection_delay(empty_user_client):
-    """Test that authentication failure includes timing protection delay."""
-    service = AppJwtService(empty_user_client)
-
-    # Mock numpy.random.uniform to return predictable delay
-    with patch("app.services.jwt.np.random.uniform", return_value=1.0):
-        with patch("app.services.jwt.asyncio.sleep") as mock_sleep:
-
-            with pytest.raises(UserNotFoundError):
-                await service.auth_with_delay("nonexistent@example.com")
-
-            # Verify sleep was called with the mocked delay
-            mock_sleep.assert_called_once_with(1.0)
-
-
-@pytest.mark.asyncio
-async def test_no_delay_for_existing_user(jwt_service):
-    """Test no timing delay for successful authentication."""
-    start_time = time.time()
-
-    await jwt_service.auth_with_delay("user@example.com")
-
-    elapsed_time = time.time() - start_time
-
-    # Should complete quickly (under 1 second)
-    assert elapsed_time < 1.0
+        service.authenticate("nonexistent@example.com")
