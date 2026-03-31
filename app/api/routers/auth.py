@@ -30,7 +30,7 @@ AUTH_FAILURE_EXCEPTIONS = (
 # User can try to log once to prevent spam to database, but this is still enough for legitimate users
 _auth_limiter = EmailRateLimiter(max_requests=1, window_seconds=60)
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/google/code", response_model=GoogleCodeExchangeResponse)

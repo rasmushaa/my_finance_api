@@ -11,11 +11,11 @@ class CategoriesService:
     making it easier to test and mock.
     """
 
-    def __init__(self, db_client=None):
+    def __init__(self, db_client):
         """Initialize the categories service.
 
         Args:
-            db_client: Database client instance. If None, uses the default gcp singleton.
+            db_client: Database client instance.
         """
         self.db_client = db_client
 

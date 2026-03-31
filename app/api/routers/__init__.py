@@ -8,6 +8,7 @@ application.
 from .auth import router as auth_router
 from .categories import router as categories_router
 from .health import router as health_router
+from .io import router as io_router
 from .model import router as model_router
 
 routers = [
@@ -15,4 +16,5 @@ routers = [
     model_router,
     categories_router,
     auth_router,
+    io_router,
 ]
