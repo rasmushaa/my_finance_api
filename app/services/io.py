@@ -188,11 +188,11 @@ class IOService:
             `{self.db_client.dataset}.d_filetypes`
         WHERE
             FileID = '{id}'
+            AND _RowStatus != 'd'
         """  # nosec B608
         df = self.db_client.sql_to_pandas(sql)
 
         if df.empty:
-            logger.error(f"File type with ID '{id}' not found in database.")
             raise UnknownFileTypeError(details={"file_schema": id})
 
         return df.iloc[0].to_dict()

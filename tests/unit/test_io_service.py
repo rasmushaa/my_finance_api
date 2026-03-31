@@ -44,12 +44,13 @@ def create_test_filetypes_db() -> pd.DataFrame:
     """Seed data for the d_filetypes table."""
     return pd.DataFrame(
         {
-            "FileID": ["Date-Amount-Receiver"],
-            "FileName": ["Test Bank CSV"],
-            "DateColumn": ["Date"],
-            "DateColumnFormat": ["%Y-%m-%d"],
-            "AmountColumn": ["Amount"],
-            "ReceiverColumn": ["Receiver"],
+            "FileID": ["Date-Amount-Receiver", "Deleted-FileType"],
+            "FileName": ["Test Bank CSV", "Deleted FileType"],
+            "DateColumn": ["Date", "Date"],
+            "DateColumnFormat": ["%Y-%m-%d", "%Y-%m-%d"],
+            "AmountColumn": ["Amount", "Amount"],
+            "ReceiverColumn": ["Receiver", "Receiver"],
+            "_RowStatus": ["i", "d"],
         }
     )
 
@@ -92,6 +93,10 @@ def make_stateful_mock_client(setup_env) -> Mock:
         return con.execute(query.replace("`", "")).df()
 
     def append_executor(df: pd.DataFrame, table_name: str):
+        # Add missing metadata columns if not present (mimic db_client)
+        df = df.copy()
+        if "_RowStatus" not in df.columns:
+            df["_RowStatus"] = "i"
         con.register("_insert_df", df)
         table_exists = con.execute(
             f"SELECT COUNT(*) FROM information_schema.tables "

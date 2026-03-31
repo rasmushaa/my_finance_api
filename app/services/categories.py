@@ -32,6 +32,7 @@ class CategoriesService:
             {self.db_client.dataset}.d_category
         WHERE
             Type = 'transaction'
+            AND _RowStatus != 'd'
         GROUP BY
             1 -- Group for case of duplication
         """  # nosec B608
@@ -52,6 +53,7 @@ class CategoriesService:
             {self.db_client.dataset}.d_category
         WHERE
             Type = 'asset'
+            AND _RowStatus != 'd'
         GROUP BY
             1 -- Group for case of duplication
         """  # nosec B608
