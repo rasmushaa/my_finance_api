@@ -6,16 +6,12 @@ with and retrieve information about the machine learning model.
 
 from fastapi import APIRouter, Depends
 
-from app.api.dependencies.providers import (
-    get_model_store,
-    get_require_admin,
-    get_require_user,
-)
+from app.api.dependencies.providers import get_model_store, get_require_admin
 from app.schemas.error import ErrorResponse
 from app.schemas.model import ModelMetadataResponse, PredictRequest, PredictResponse
 from app.services.model import ModelService
 
-router = APIRouter(prefix="/model", tags=["model"])
+router = APIRouter(prefix="/model", tags=["ML Model Endpoints"])
 
 
 @router.post(
@@ -30,7 +26,7 @@ router = APIRouter(prefix="/model", tags=["model"])
 )
 def predict(
     request: PredictRequest,
-    payload: dict = Depends(get_require_user),
+    payload: dict = Depends(get_require_admin),
     store: ModelService = Depends(get_model_store),
 ):
     df = request.to_dataframe()

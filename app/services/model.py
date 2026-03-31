@@ -47,6 +47,7 @@ class ModelService:
 
         Only the features required by the model (as defined in its input schema) are used for prediction.
         MlFlow handles extra features gracefully, but this prevents warnings in the log.
+        All featues are converted to lowercase to avoid case sensitivity issues.
 
         Returns
         -------
@@ -54,11 +55,20 @@ class ModelService:
             List of predictions from the model.
         """
         model_features = [f.name for f in self.__model.metadata.signature.inputs]
-        if any(feature not in input_df.columns for feature in model_features):
+        # Map lowercased input column name -> original input column name
+        input_col_map = {col.lower(): col for col in input_df.columns}
+        missing = [f for f in model_features if f.lower() not in input_col_map]
+        if missing:
             raise ModelInputError(
-                details={"message": "Input features missing required model features."}
+                details={
+                    "message": "Input features missing required model features",
+                    "required_features": model_features,
+                    "input_features": list(input_df.columns),
+                }
             )
-        used_data = input_df[model_features]
+        # Select columns by their original name in input_df and rename to model's casing
+        used_data = input_df[[input_col_map[f.lower()] for f in model_features]]
+        used_data = used_data.set_axis(model_features, axis=1)
         return self.__model.predict(used_data).tolist()
 
     def load(self) -> None:

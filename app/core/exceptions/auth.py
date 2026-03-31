@@ -27,7 +27,7 @@ class MissingIdTokenError(AppError):
             status_code=401,
             code=ErrorCodes.AUTH.value,
             message="Google token exchange response missing id_token",
-            # Do not include sensitive details in the error respons
+            # Do not include sensitive details in the error response
         )
 
 
@@ -37,7 +37,17 @@ class InvalidIdTokenError(AppError):
             status_code=401,
             code=ErrorCodes.AUTH.value,
             message="Invalid Google ID token",
-            # Do not include sensitive details in the error respons
+            # Do not include sensitive details in the error response
+        )
+
+
+class ExpiredIdTokenError(AppError):
+    def __init__(self, details: dict | None = None):
+        super().__init__(
+            status_code=401,
+            code=ErrorCodes.AUTH.value,
+            message="Expired JWT ID token",
+            # Do not include sensitive details in the error response
         )
 
 
@@ -47,7 +57,7 @@ class MissingEmailError(AppError):
             status_code=401,
             code=ErrorCodes.AUTH.value,
             message="Google ID token missing email",
-            # Do not include sensitive details in the error respons
+            # Do not include sensitive details in the error response
         )
 
 
@@ -72,10 +82,10 @@ class UserNotAuthorizedError(AppError):
 
 
 class AuthRateLimitExceededError(AppError):
-    def __init__(self, cooldown_seconds: int, details: dict | None = None):
+    def __init__(self, email: str, cooldown_seconds: int, details: dict | None = None):
         super().__init__(
             status_code=429,
             code=ErrorCodes.RATE_LIMIT_EXCEEDED.value,
-            message=f"Too many authentication attempts. Please wait {cooldown_seconds} seconds.",
-            details={"cooldown_seconds": cooldown_seconds},
+            message=f"Too many authentication attempts for {email}. Please wait {cooldown_seconds} seconds.",
+            details={"email": email, "cooldown_seconds": cooldown_seconds},
         )

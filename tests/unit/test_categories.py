@@ -45,6 +45,8 @@ def create_test_categories_db() -> pd.DataFrame:
                 "Real Estate",
                 "Cash",
                 "Stocks",  # Duplicate for GROUP BY testing
+                "DeletedFood",  # Soft-deleted transaction
+                "DeletedStock",  # Soft-deleted asset
             ],
             "Type": [
                 "transaction",
@@ -56,7 +58,10 @@ def create_test_categories_db() -> pd.DataFrame:
                 "asset",
                 "asset",
                 "asset",
+                "transaction",
+                "asset",
             ],
+            "_RowStatus": ["i", "i", "i", "i", "i", "i", "i", "i", "i", "d", "d"],
         }
     )
 
@@ -94,7 +99,7 @@ def test_categories_service_with_real_sql_execution(setup_categories_env):
     # Initialize the service with the mock client
     service = CategoriesService(db_client=mock_client)
 
-    # Test expenditure categories - should be deduplicated by GROUP BY
+    # Test expenditure categories - should be deduplicated by GROUP BY and exclude soft-deleted
     expenditure_result = service.get_expenditure_categories()
     expected_expenditure = [
         "Entertainment",
@@ -102,10 +107,14 @@ def test_categories_service_with_real_sql_execution(setup_categories_env):
         "Transport",
     ]  # DuckDB sorts by default
     assert sorted(expenditure_result) == expected_expenditure
-    assert len(expenditure_result) == 3  # Duplicates removed by GROUP BY
+    assert (
+        len(expenditure_result) == 3
+    )  # Duplicates removed by GROUP BY, soft-deleted excluded
 
-    # Test asset categories - should be deduplicated by GROUP BY
+    # Test asset categories - should be deduplicated by GROUP BY and exclude soft-deleted
     asset_result = service.get_asset_categories()
     expected_assets = ["Bonds", "Cash", "Real Estate", "Stocks"]
     assert sorted(asset_result) == expected_assets
-    assert len(asset_result) == 4  # Duplicates removed by GROUP BY
+    assert (
+        len(asset_result) == 4
+    )  # Duplicates removed by GROUP BY, soft-deleted excluded

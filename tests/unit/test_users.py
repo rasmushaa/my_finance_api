@@ -41,6 +41,7 @@ def create_test_users_db() -> pd.DataFrame:
                 "admin@company.com",
                 "viewer@company.com",
                 "editor@company.com",
+                "deleted.user@example.com",
             ],
             "Role": [
                 "user",
@@ -48,7 +49,9 @@ def create_test_users_db() -> pd.DataFrame:
                 "admin",
                 "viewer",
                 "editor",
+                "user",
             ],
+            "_RowStatus": ["i", "i", "i", "i", "i", "d"],
         }
     )
 

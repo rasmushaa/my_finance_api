@@ -88,8 +88,8 @@ def test_sql_to_pandas(mock_read_gbq):
         "GCP_CGS_BUCKET_DIR": "test-dir",
     },
 )
-def test_write_pandas_to_table_with_mixed_columns(mock_to_gbq):
-    """Test write_pandas_to_table with mixed column types including dates."""
+def test_append_pandas_to_table_schema(mock_to_gbq):
+    """Test append_pandas_to_table builds correct BQ schema for mixed column types."""
     # Arrange
     api = GoogleCloudAPI()
     df = pd.DataFrame(
@@ -104,27 +104,75 @@ def test_write_pandas_to_table_with_mixed_columns(mock_to_gbq):
     table_name = "test_table"
 
     # Act
-    api.write_pandas_to_table(df, table_name)
+    api.append_pandas_to_table(df, table_name)
 
     # Assert
     mock_to_gbq.assert_called_once()
     _, kwargs = mock_to_gbq.call_args
 
     schema = kwargs["table_schema"]
+    schema_by_name = {col["name"]: col["type"] for col in schema}
 
-    # Check string columns
-    string_columns = [col["name"] for col in schema if col["type"] == "STRING"]
-    assert "name" in string_columns
-    assert "city" in string_columns
+    assert schema_by_name["name"] == "STRING"
+    assert schema_by_name["city"] == "STRING"
+    assert schema_by_name["transaction_date"] == "DATE"
+    assert schema_by_name["end_date"] == "DATE"
 
-    # Check date columns
-    date_columns = [col["name"] for col in schema if col["type"] == "DATE"]
-    assert len(date_columns) == 2
-    assert "transaction_date" in date_columns
-    assert "end_date" in date_columns
-
-    # Check other call parameters
     assert kwargs["destination_table"] == "test_dataset_test.test_table"
     assert kwargs["project_id"] == "test-project"
     assert kwargs["location"] == "US"
     assert kwargs["if_exists"] == "append"
+
+
+@patch("pandas_gbq.to_gbq")
+@patch.dict(
+    os.environ,
+    {
+        "GCP_PROJECT_ID": "test-project",
+        "GCP_BQ_DATASET": "test_dataset",
+        "ENV": "test",
+        "GCP_LOCATION": "US",
+    },
+)
+def test_append_pandas_to_table_includes_metadata_columns(mock_to_gbq):
+    """Test that append_pandas_to_table includes metadata columns in the uploaded
+    DataFrame."""
+    api = GoogleCloudAPI()
+    df = pd.DataFrame({"amount": [10.0, 20.0], "name": ["Alice", "Bob"]})
+
+    api.append_pandas_to_table(df, "test_table")
+
+    mock_to_gbq.assert_called_once()
+    args, _ = mock_to_gbq.call_args
+    uploaded_df = args[0]
+
+    # Metadata columns are present
+    assert "_RowStatus" in uploaded_df.columns
+    assert "_RowCreatedAt" in uploaded_df.columns
+    assert "_RowUpdatedAt" in uploaded_df.columns
+    assert "_RowUploadHash" in uploaded_df.columns
+
+    # Original data is preserved
+    assert list(uploaded_df["amount"]) == [10.0, 20.0]
+    assert list(uploaded_df["name"]) == ["Alice", "Bob"]
+
+    # _RowStatus is always 'i' (inserted)
+    assert (uploaded_df["_RowStatus"] == "i").all()
+
+    # Timestamps are pandas Timestamps
+    assert pd.api.types.is_datetime64_any_dtype(uploaded_df["_RowCreatedAt"])
+    assert pd.api.types.is_datetime64_any_dtype(uploaded_df["_RowUpdatedAt"])
+
+    # CreatedAt and UpdatedAt are equal on insert
+    assert (uploaded_df["_RowCreatedAt"] == uploaded_df["_RowUpdatedAt"]).all()
+
+    # Hash values are positive integers and unique per row
+    assert (
+        uploaded_df["_RowUploadHash"]
+        .apply(lambda x: isinstance(x, int) and x > 0)
+        .all()
+    )
+    assert uploaded_df["_RowUploadHash"].nunique() == len(uploaded_df)
+
+    # Original DataFrame is not mutated
+    assert "_RowStatus" not in df.columns

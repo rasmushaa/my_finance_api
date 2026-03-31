@@ -120,6 +120,7 @@ class UsersService:
             {self.db_client.dataset}.d_credentials
         WHERE
             UserName = '{sanitized_email}'
+            AND _RowStatus != 'd'
         """  # nosec B608
         df = self.db_client.sql_to_pandas(sql)
         logger.debug(f"Fetched user information from BigQuery:\n{df}")

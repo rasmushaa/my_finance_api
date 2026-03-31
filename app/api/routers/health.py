@@ -6,7 +6,7 @@ that the application is running and responsive.
 
 from fastapi import APIRouter, Request
 
-router = APIRouter(prefix="/health", tags=["health"])
+router = APIRouter(prefix="/health", tags=["Health"])
 
 
 @router.get("/")

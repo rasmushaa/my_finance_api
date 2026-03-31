@@ -11,11 +11,11 @@ class CategoriesService:
     making it easier to test and mock.
     """
 
-    def __init__(self, db_client=None):
+    def __init__(self, db_client):
         """Initialize the categories service.
 
         Args:
-            db_client: Database client instance. If None, uses the default gcp singleton.
+            db_client: Database client instance.
         """
         self.db_client = db_client
 
@@ -32,6 +32,7 @@ class CategoriesService:
             {self.db_client.dataset}.d_category
         WHERE
             Type = 'transaction'
+            AND _RowStatus != 'd'
         GROUP BY
             1 -- Group for case of duplication
         """  # nosec B608
@@ -52,6 +53,7 @@ class CategoriesService:
             {self.db_client.dataset}.d_category
         WHERE
             Type = 'asset'
+            AND _RowStatus != 'd'
         GROUP BY
             1 -- Group for case of duplication
         """  # nosec B608

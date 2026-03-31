@@ -3,6 +3,7 @@ from typing import Any, Callable, Protocol
 from app.core.database_client import GoogleCloudAPI
 from app.services.categories import CategoriesService
 from app.services.google_oauth import GoogleOAuthService
+from app.services.io import IOService
 from app.services.jwt import AppJwtService
 from app.services.model import ModelService
 from app.services.users import UsersService
@@ -77,45 +78,71 @@ class Container:
 container = Container()
 
 
-def setup_container():
-    """Set up the dependency injection container with all services and clients.
+def create_service_provider(service_class, **dependencies):
+    """Generic provider factory for services with dependencies.
 
-    This function is called once at application startup to register all dependencies.
-    The container uses lazy providers, so actual instances are only created when
-    resolved, allowing for efficient resource management and easy mocking in tests.
+    Parameters
+    ----------
+    service_class : type
+        The service class to instantiate.
+    **dependencies : dict
+        Mapping of parameter names to container dependency names.
+        Example: create_service_provider(MyService, db_client="cloud_client", model="model_store")
     """
 
-    # Cloud clients - register as singletons since they manage their own connections and state
+    def provider():
+        resolved_deps = {
+            param: container.resolve(dep_name)
+            for param, dep_name in dependencies.items()
+        }
+        return service_class(**resolved_deps)
+
+    return provider
+
+
+def setup_container():
+    """Set up the dependency injection container with all services and clients."""
+
+    # Cloud clients - register as singletons
     container.register("cloud_client", lambda: GoogleCloudAPI(), singleton=True)
-
-    # Generic factory for services requiring a database client
-    def create_service_with_db_client(service_class):
-        def provider():
-            cloud_client = container.resolve("cloud_client")
-            return service_class(db_client=cloud_client)
-
-        return provider
 
     # Database services
     container.register(
-        "categories_service", create_service_with_db_client(CategoriesService)
+        "categories_service",
+        create_service_provider(CategoriesService, db_client="cloud_client"),
     )
-    container.register("users_service", create_service_with_db_client(UsersService))
+    container.register(
+        "users_service",
+        create_service_provider(UsersService, db_client="cloud_client"),
+    )
 
-    # JWT service - singleton for performance
+    # JWT service - singleton
     container.register(
         "jwt_service",
-        lambda: AppJwtService(user_client=container.resolve("users_service")),
+        create_service_provider(AppJwtService, user_client="users_service"),
         singleton=True,
     )
 
-    # OAuth services - singletons for performance
+    # OAuth services - singleton
     container.register(
-        "google_oauth_service", lambda: GoogleOAuthService(), singleton=True
+        "google_oauth_service",
+        lambda: GoogleOAuthService(),
+        singleton=True,
     )
 
-    # Model service - singleton because it loads heavy ML models
+    # Model service - singleton
     container.register("model_store", lambda: ModelService(), singleton=True)
+
+    # IO service - depends on cloud_client and model_store
+    container.register(
+        "io_service",
+        create_service_provider(
+            IOService,
+            db_client="cloud_client",
+            model_service="model_store",
+        ),
+        singleton=True,
+    )
 
 
 setup_container()

@@ -4,11 +4,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.dependencies.providers import (
-    get_model_store,
-    get_require_admin,
-    get_require_user,
-)
+from app.api.dependencies.providers import get_model_store, get_require_admin
 from app.core.exceptions.base import ErrorCodes
 from app.main import app
 
@@ -77,7 +73,7 @@ def cleanup_overrides():
 @patch("app.schemas.model.CANONICAL_FEATURES", ["a", "b"])
 def test_predict_endpoint():
     # Override auth and model dependencies
-    app.dependency_overrides[get_require_user] = lambda: {"user_id": "test_user"}
+    app.dependency_overrides[get_require_admin] = lambda: {"user_id": "test_user"}
     app.dependency_overrides[get_model_store] = override_store
 
     client = TestClient(app)
@@ -91,7 +87,7 @@ def test_predict_endpoint():
 @patch("app.schemas.model.CANONICAL_FEATURES", ["a", "b"])
 def test_predict_endpoint_missing_feature():
     # Override auth and model dependencies
-    app.dependency_overrides[get_require_user] = lambda: {"user_id": "test_user"}
+    app.dependency_overrides[get_require_admin] = lambda: {"user_id": "test_user"}
     app.dependency_overrides[get_model_store] = override_store
 
     client = TestClient(app)
@@ -110,7 +106,7 @@ def test_predict_endpoint_missing_feature():
 @patch("app.schemas.model.CANONICAL_FEATURES", ["a", "b"])
 def test_predict_endpoint_extra_feature():
     # Override auth and model dependencies
-    app.dependency_overrides[get_require_user] = lambda: {"user_id": "test_user"}
+    app.dependency_overrides[get_require_admin] = lambda: {"user_id": "test_user"}
     app.dependency_overrides[get_model_store] = override_store
 
     client = TestClient(app)

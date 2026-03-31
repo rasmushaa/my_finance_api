@@ -64,6 +64,8 @@ def setup_logging(
         "urllib3.connectionpool",
         "google.auth._default",
         "matplotlib.font_manager",
+        "pandas_gbq.gbq_connector",
+        "httpx",
     ]
 
     if suppress_external:

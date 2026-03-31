@@ -126,10 +126,10 @@ jobs:
         python --version
         uv pip list
 
-    - name: Run tests
+    - name: Run unitests (skip integration tests)
       run: |
         export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-        uv run pytest
+        uv run pytest -m "not integration"
 
     - name: Load model artifacts
       if: env.SHOULD_DEPLOY == 'true'

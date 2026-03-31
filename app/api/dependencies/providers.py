@@ -10,6 +10,7 @@ from app.core.container import container
 from app.core.security import require_role, require_user
 from app.services.categories import CategoriesService
 from app.services.google_oauth import GoogleOAuthService
+from app.services.io import IOService
 from app.services.jwt import AppJwtService
 from app.services.model import ModelService
 from app.services.users import UsersService
@@ -38,3 +39,7 @@ def get_google_oauth_service() -> GoogleOAuthService:
 
 def get_jwt_service() -> AppJwtService:
     return container.resolve("jwt_service")
+
+
+def get_io_service() -> IOService:
+    return container.resolve("io_service")
