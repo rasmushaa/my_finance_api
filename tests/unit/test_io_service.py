@@ -8,7 +8,7 @@ import duckdb
 import pandas as pd
 import pytest
 
-from app.core.exceptions.file import UnknownFileTypeError
+from app.core.errors.domain import UnknownFileTypeError
 from app.services.io import IOService
 
 

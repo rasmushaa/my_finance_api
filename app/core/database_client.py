@@ -8,7 +8,7 @@ from google.api_core.exceptions import GoogleAPICallError
 from google.cloud import bigquery
 from google.cloud.exceptions import Forbidden, NotFound
 
-from app.core.exceptions.database import DatabaseInternalError
+from app.core.errors.infra import DatabaseInternalError
 
 logger = logging.getLogger(__name__)
 

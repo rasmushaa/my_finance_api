@@ -6,7 +6,7 @@ from typing import Protocol
 
 from jose import jwt
 
-from app.core.exceptions.auth import (
+from app.core.errors.auth import (
     ExpiredIdTokenError,
     InvalidIdTokenError,
     UserNotFoundError,
@@ -114,11 +114,9 @@ class AppJwtService:
             return payload
 
         except jwt.ExpiredSignatureError as e:
-            logger.error(f"JWT decoding failed: {e}")
             raise ExpiredIdTokenError()
 
         except jwt.JWTError as e:
-            logger.error(f"JWT decoding failed: {e}")
             raise InvalidIdTokenError()
 
     def __issue_app_jwt(self, email: str, role: str) -> str:

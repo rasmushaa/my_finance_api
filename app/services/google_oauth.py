@@ -8,7 +8,7 @@ import requests
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 
-from app.core.exceptions.auth import (
+from app.core.errors.auth import (
     CodeExchangeError,
     InvalidIdTokenError,
     MissingEmailError,

@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app.core.exceptions.model import ModelArtifactsError, ModelInputError
+from app.core.errors.domain import ModelArtifactsError, ModelInputError
 from app.services.model import ModelService
 
 

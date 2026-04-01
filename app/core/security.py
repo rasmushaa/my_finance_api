@@ -4,7 +4,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.container import container
-from app.core.exceptions.auth import MissingBearerTokenError, UserNotAuthorizedError
+from app.core.errors.auth import MissingBearerTokenError, UserNotAuthorizedError
 
 security = HTTPBearer(
     auto_error=False

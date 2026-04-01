@@ -34,6 +34,25 @@ MOCK_FILE_NAME = "local-integrtion-mock-data"
 
 
 @pytest.mark.integration
+def test_category_integration():
+
+    with TestClient(app) as client:
+        response = client.get(
+            API_BASE_URL + "data/categories/expenditures",
+            headers={"Authorization": f"Bearer {os.environ['LOCAL_DEV_USER_TOKEN']}"},
+        )
+        logger.info(f"Categories response: {response.status_code} {response.text}")
+        assert response.status_code == 200, "Failed to fetch categories"
+
+        response = client.get(
+            API_BASE_URL + "data/categories/assets",
+            headers={"Authorization": f"Bearer {os.environ['LOCAL_DEV_USER_TOKEN']}"},
+        )
+        logger.info(f"Categories response: {response.status_code} {response.text}")
+        assert response.status_code == 200, "Failed to fetch categories"
+
+
+@pytest.mark.integration
 def test_transaction_integration():
 
     df_mock = pd.DataFrame(

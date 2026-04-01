@@ -3,7 +3,7 @@ import logging
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from app.core.exceptions.base import AppError
+from app.core.errors.base_error import AppError
 from app.core.security import extract_client_context
 from app.schemas.error import ErrorResponse
 
@@ -20,7 +20,7 @@ def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     """
 
     logger.error(
-        f"{exc.code}: {exc.message} - Details:{exc.details} - Context: {extract_client_context(request)}"
+        f"{exc.code}: {exc.message} - Details:{exc.details} - Context:{extract_client_context(request)}"
     )
 
     error = ErrorResponse(

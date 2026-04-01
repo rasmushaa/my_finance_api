@@ -8,7 +8,7 @@ import mlflow
 import pandas as pd
 from mlflow.pyfunc import PyFuncModel
 
-from app.core.exceptions.model import ModelArtifactsError, ModelInputError
+from app.core.errors.domain import ModelArtifactsError, ModelInputError
 from app.schemas.model import CANONICAL_FEATURES
 
 logger = logging.getLogger(__name__)
@@ -61,7 +61,7 @@ class ModelService:
         if missing:
             raise ModelInputError(
                 details={
-                    "message": "Input features missing required model features",
+                    "hint": "API and Mlflwo model inputs are not synced. Ensure the model is trained with the correct features and re-deploy the API.",
                     "required_features": model_features,
                     "input_features": list(input_df.columns),
                 }

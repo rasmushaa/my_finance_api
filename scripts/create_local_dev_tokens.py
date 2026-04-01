@@ -8,6 +8,9 @@ The credential lifetime is determined by the APP_JWT_EXP_DELTA_MINUTES setting i
 same .env file.
 
 This is not intended for production use.
+
+If this fails for private artifactory auth, try to re sync uv using
+`scripts/uv_sync.sh`.
 """
 
 import sys

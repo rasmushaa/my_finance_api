@@ -12,9 +12,7 @@ from app.api.dependencies.providers import (
     get_require_admin,
     get_require_user,
 )
-from app.core.exceptions.base import ErrorCodes
-from app.core.exceptions.file import UnknownFileTypeError
-from app.core.exceptions.model import ModelInputError
+from app.core.errors.domain import ModelInputError, UnknownFileTypeError
 from app.main import app
 
 # Container needs JWT, which needs environment variables
@@ -182,8 +180,8 @@ def test_import_csv_response_data_values():
     assert df.iloc[1]["Category"] == "Income"
 
 
-def test_import_csv_invalid_content_type_returns_400():
-    """Test that uploading a non-CSV file type returns a 400 FILE_ERROR."""
+def test_import_csv_invalid_content_type_still_works():
+    """Test that uploading a non-CSV file type still processes the file."""
     app.dependency_overrides[get_require_user] = mock_require_user
     app.dependency_overrides[get_io_service] = override_io_service
 
@@ -193,8 +191,22 @@ def test_import_csv_invalid_content_type_returns_400():
         files=[_make_csv_upload(content_type="application/json", filename="data.json")],
     )
 
-    assert response.status_code == 400
-    assert response.json()["code"] == ErrorCodes.FILE_ERROR.value
+    df = pd.read_csv(io.StringIO(response.text))
+
+    # Shape
+    assert len(df) == 2
+    assert set(df.columns) == {"date", "receiver", "amount", "Category"}
+
+    # Row values
+    assert df.iloc[0]["date"] == "2024-01-01"
+    assert df.iloc[0]["receiver"] == "Grocery Store"
+    assert df.iloc[0]["amount"] == pytest.approx(-25.50)
+    assert df.iloc[0]["Category"] == "Food"
+
+    assert df.iloc[1]["date"] == "2024-01-02"
+    assert df.iloc[1]["receiver"] == "Salary"
+    assert df.iloc[1]["amount"] == pytest.approx(2000.00)
+    assert df.iloc[1]["Category"] == "Income"
 
 
 def test_import_csv_unknown_filetype_error_returns_400():

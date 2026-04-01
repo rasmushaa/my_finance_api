@@ -6,8 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.dependencies.providers import get_google_oauth_service, get_jwt_service
-from app.core.exceptions.auth import CodeExchangeError
-from app.core.exceptions.base import ErrorCodes
+from app.core.errors.auth import CodeExchangeError
+from app.core.errors.base_error import ErrorCode
 from app.main import app
 
 # Container needs JWT, which needs environment variables
@@ -95,7 +95,7 @@ def test_auth_google_code_exchange_failure_returns_401():
     response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
 
     assert response.status_code == 401
-    assert response.json()["code"] == ErrorCodes.AUTH.value
+    assert response.json()["code"] == ErrorCode.INVALID_TOKEN
 
 
 def test_auth_rate_limit_blocks_after_exceeded():
@@ -115,7 +115,7 @@ def test_auth_rate_limit_blocks_after_exceeded():
     response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
     assert response.status_code == 429, "The extra auth call should be rate limited"
     data = response.json()
-    assert data["code"] == ErrorCodes.RATE_LIMIT_EXCEEDED.value
+    assert data["code"] == ErrorCode.RATE_LIMIT_EXCEEDED.value
     assert "cooldown_seconds" in data["details"]
 
 

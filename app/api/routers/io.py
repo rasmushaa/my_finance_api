@@ -8,7 +8,6 @@ from app.api.dependencies.providers import (
     get_require_admin,
     get_require_user,
 )
-from app.core.exceptions.base import AppError, ErrorCodes
 from app.schemas.error import ErrorResponse
 from app.schemas.io import (
     CSVImportRequest,
@@ -19,8 +18,6 @@ from app.schemas.io import (
 from app.services.io import IOService
 
 router = APIRouter(prefix="/io", tags=["File IO"])
-
-_ALLOWED_CONTENT_TYPES = {"text/csv", "application/csv"}
 
 
 # -- Transactions ----------------------------------------------------------------------
@@ -41,17 +38,7 @@ def transform_csv(
     payload: dict = Depends(get_require_user),
 ):
     # Validate content type using CSVImportRequest contract
-    request_meta = CSVImportRequest(content_type=file.content_type or "")
-    if request_meta.content_type not in _ALLOWED_CONTENT_TYPES:
-        raise AppError(
-            status_code=400,
-            code=ErrorCodes.FILE_ERROR.value,
-            message="Unsupported file type",
-            details={
-                "invalid_type": request_meta.content_type,
-                "allowed_types": sorted(_ALLOWED_CONTENT_TYPES),
-            },
-        )
+    CSVImportRequest(content_type=file.content_type or "")
 
     # Transform file and run predictions (handled together by IOService)
     transformed_df = io_service.transform_input_file(file.file)
@@ -96,17 +83,7 @@ def append_transactions(
     payload: dict = Depends(get_require_user),
 ):
     # Validate content type using CSVImportRequest contract
-    request_meta = CSVImportRequest(content_type=file.content_type or "")
-    if request_meta.content_type not in _ALLOWED_CONTENT_TYPES:
-        raise AppError(
-            status_code=400,
-            code=ErrorCodes.FILE_ERROR.value,
-            message="Unsupported file type",
-            details={
-                "invalid_type": request_meta.content_type,
-                "allowed_types": sorted(_ALLOWED_CONTENT_TYPES),
-            },
-        )
+    CSVImportRequest(content_type=file.content_type or "")
 
     io_service.append_transactions(file.file, user_email=payload["sub"])
     return Response(status_code=200, content="CSV data appended to table successfully")

@@ -7,7 +7,7 @@ from typing import Tuple
 import chardet
 import pandas as pd
 
-from app.core.exceptions.file import DMLError, UnknownFileTypeError
+from app.core.errors.domain import DatabaseQueryError, UnknownFileTypeError
 from app.services.model import ModelService
 
 logger = logging.getLogger(__name__)
@@ -83,11 +83,12 @@ class IOService:
         """  # nosec B608
         row_count = self.db_client.execute_sql(sql)
         if row_count == 0 or row_count is None:
-            raise DMLError(
+            raise DatabaseQueryError(
+                message=f"File type with name '{filename}' not found or already deleted.",
                 details={
+                    "hint": "Check if the file name is correct and not already deleted.",
                     "file_name": filename,
-                    "details": "File type not found or already deleted",
-                }
+                },
             )
 
     def append_transactions(self, input_file, user_email: str):
@@ -193,7 +194,22 @@ class IOService:
         df = self.db_client.sql_to_pandas(sql)
 
         if df.empty:
-            raise UnknownFileTypeError(details={"file_schema": id})
+            raise UnknownFileTypeError(
+                details={
+                    "hint": "The file type has not been registered in the database. Please check the file format and ensure it is supported.",
+                    "file_schema": id,
+                }
+            )
+
+        if len(df) > 1:
+            raise DatabaseQueryError(
+                message=f"Multiple file types found with the same schema ID '{id}'",
+                details={
+                    "hint": "This should not happen, as the file schema ID is supposed to be unique. Please check the database for duplicate entries.",
+                    "file_schema": id,
+                    "row_count": len(df),
+                },
+            )
 
         return df.iloc[0].to_dict()
 
