@@ -28,9 +28,9 @@ app/
 ├── main.py                   # FastAPI application entry point
 ├── api/                      # API layer
 │   ├── routers/              # Route handlers by feature
-│   └── dependencies/         # FastAPI dependency providers
+│   └── dependencys.py        # FastAPI dependency providers
 ├── core/                     # Core infrastructure
-│   └── exceptions/           # Structured exception hierarchy
+│   └── errors/               # Structured exception hierarchy
 ├── services/                 # Business logic services
 └── schemas/                  # Data contracts and validation
 tests/                        # Comprehensive test suite
@@ -46,10 +46,9 @@ scripts/                      # Development and deployment scripts
 - **Security Middleware**: Bearer token validation with custom error handling
 
 ### ML Model Integration
-- **Async Model Loading**: Non-blocking model initialization with MLflow integration
+- **Startup Model Loading**: Model initialization at app startup (Cloud Run compatible)
 - **Model Versioning**: Complete metadata tracking and version management
 - **Feature Validation**: Input validation against canonical feature sets
-- **Health Monitoring**: Model status and readiness checks
 - **Prediction API**: High-performance inference endpoints
 
 ### Error Handling & Observability
@@ -60,7 +59,7 @@ scripts/                      # Development and deployment scripts
 
 ### Data Management
 - **BigQuery Integration**: Cloud-native data storage and querying
-- **Category Management**: Financial transaction categorization
+- **Transaction Processing**: File-type aware CSV normalization and model labeling
 - **User Management**: Profile and preference handling
 
 ## Development Setup
@@ -115,16 +114,13 @@ docker run -p 8000:8000 my-finance-api
 #### Running Tests
 ```bash
 # Run all tests
-pytest
+uv run pytest
 
-# Unit tests for business logic
-pytest tests/test_*.py -v
+# Unit test suite (used in CI)
+uv run pytest -m "not integration"
 
-# API integration tests
-pytest tests/test_api_*.py -v
-
-# With coverage
-pytest --cov=app tests/
+# Integration tests (requires local credentials and .env setup)
+uv run pytest -m integration -s
 ```
 
 #### Test Architecture
@@ -140,12 +136,14 @@ pytest --cov=app tests/
 - **ReDoc**: Available at `http://localhost:8000/redoc`
 
 ### Main Endpoints
-- `POST /auth/google/code` - Google OAuth code exchange
-- `GET /data/categories/{type}` - Financial category retrieval
-- `POST /model/predict` - ML model predictions
-- `GET /model/status` - Model health and readiness
-- `GET /model/metadata` - Model version and information
-- `GET /health` - Application health check
+- `POST /app/v1/auth/google/code` - Google OAuth code exchange
+- `POST /app/v1/model/predict` - ML model predictions
+- `GET /app/v1/model/metadata` - Model version and metadata
+- `POST /app/v1/transactions/transform` - Transform and label input CSV
+- `POST /app/v1/transactions/upload` - Upload processed transactions
+- `GET /app/v1/transactions/labels` - Available transaction labels
+- `POST /app/v1/assets/upload` - Upload asset snapshot
+- `GET /app/v1/health/` - Application health check
 
 ## Deployment Considerations
 
@@ -159,4 +157,4 @@ pytest --cov=app tests/
 - Async request handling
 - Singleton pattern for heavy resources (ML models, DB connections)
 - Lazy loading of dependencies
-- Background task support for model loading
+- Startup-time model warmup for predictable inference latency

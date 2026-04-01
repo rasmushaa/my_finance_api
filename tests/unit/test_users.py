@@ -35,7 +35,7 @@ def create_test_users_db() -> pd.DataFrame:
     """Create realistic test data for users."""
     return pd.DataFrame(
         {
-            "UserName": [
+            "UserEmail": [
                 "john.doe@example.com",
                 "jane.smith@example.com",
                 "admin@company.com",
@@ -43,7 +43,7 @@ def create_test_users_db() -> pd.DataFrame:
                 "editor@company.com",
                 "deleted.user@example.com",
             ],
-            "Role": [
+            "UserRole": [
                 "user",
                 "user",
                 "admin",

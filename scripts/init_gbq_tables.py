@@ -29,17 +29,17 @@ BASIC_META_COLS = [
     ),
     bigquery.SchemaField(
         "_RowUploadHash",
-        "STRING",
+        "INT64",
         mode="NULLABLE",
-        description="Original hash of the row data (including the metadata cols) for traceability and auditing purposes",
+        description="64-bit hash of the row data (including metadata cols) for traceability and auditing purposes",
     ),
 ]
 TRANSACTIONS_META_COLS = [
     bigquery.SchemaField(
         "_RowProcessingID",
-        "STRING",
+        "INT64",
         mode="NULLABLE",
-        description="Unique ID (input features and timestamp) to link the original input row to the model predictions for monitoring and auditing purposes",
+        description="64-bit ID (input features and timestamp) used to link original input rows to model predictions",
     ),
 ]
 
