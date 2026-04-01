@@ -1,10 +1,10 @@
-"""API verions router module.
+"""API version router module.
 
-This module defines the API router for version <N> of the API, which includes all the
-endpoint groups (e.g., model, data, auth) under the /app/v<N> prefix.
+This module composes all v1 endpoint groups under the `/app/v1` prefix.
 
-The main module (app/main.py) must include all version router collections to be
-accessible in the application.
+Notes
+-----
+The main application entrypoint (`app/main.py`) includes this router collection.
 """
 
 from fastapi import APIRouter

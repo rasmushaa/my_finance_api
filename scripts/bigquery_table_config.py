@@ -1,4 +1,8 @@
-"""Helpers for loading BigQuery table schemas from YAML."""
+"""Load BigQuery table schemas from YAML configuration.
+
+This module is used by script/test tooling (not runtime app services) to
+read table definitions from ``config/bigquery_tables.yaml``.
+"""
 
 from __future__ import annotations
 
@@ -15,6 +19,18 @@ SCHEMA_CONFIG_PATH = (
 
 @cache
 def load_bigquery_table_definitions() -> dict[str, list[dict[str, Any]]]:
+    """Load BigQuery table definitions from YAML.
+
+    Returns
+    -------
+    dict[str, list[dict[str, Any]]]
+        Mapping of table name to an ordered list of column specification dicts.
+
+    Raises
+    ------
+    ValueError
+        If the YAML structure is missing required keys or has invalid types.
+    """
     payload = yaml.safe_load(SCHEMA_CONFIG_PATH.read_text(encoding="utf-8"))
     tables = payload.get("tables")
     if not isinstance(tables, dict):

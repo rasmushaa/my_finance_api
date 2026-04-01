@@ -1,3 +1,14 @@
+"""Initialize BigQuery datasets and tables from YAML schema configuration.
+
+Usage
+-----
+Run from project root:
+
+```
+uv run python scripts/init_gbq_tables.py <dev|stg|prod>
+```
+"""
+
 import os
 import sys
 
@@ -6,12 +17,22 @@ from dotenv import load_dotenv
 from google.cloud import bigquery
 from google.cloud.exceptions import Conflict
 
-# How to run: uv run python scripts/init_gbq_tables.py <name of the environment, dev, stg, prod, etc.>
-
 
 def __build_schema_fields(
     column_specs: list[dict[str, str]]
 ) -> list[bigquery.SchemaField]:
+    """Build BigQuery schema fields from column specs.
+
+    Parameters
+    ----------
+    column_specs : list[dict[str, str]]
+        Ordered list of column definitions from YAML.
+
+    Returns
+    -------
+    list[bigquery.SchemaField]
+        SchemaField list passed to BigQuery table creation.
+    """
     schema_fields: list[bigquery.SchemaField] = []
     for col in column_specs:
         schema_fields.append(
@@ -28,6 +49,19 @@ def __build_schema_fields(
 def __create_table(
     dataset: bigquery.Table, table_name: str, schema: list, client: bigquery.Client
 ) -> None:
+    """Create a table and ignore already-existing table conflicts.
+
+    Parameters
+    ----------
+    dataset : bigquery.Table
+        Destination dataset reference.
+    table_name : str
+        Table name to create inside the dataset.
+    schema : list
+        BigQuery schema field list.
+    client : bigquery.Client
+        BigQuery client used for table creation.
+    """
     table = dataset.table(table_name)
     table = bigquery.Table(table, schema=schema)
     try:
@@ -41,10 +75,11 @@ def __create_table(
 
 
 def main():
+    """Entrypoint for dataset and table initialization."""
 
     # 1. Verify User Inputs Env: Dev, Stg, Prod
     if len(sys.argv) != 2 or sys.argv[1] not in ["dev", "stg", "prod"]:
-        print("Usage: python init_bigquery_databse.py <dev, stg, prod>")
+        print("Usage: python scripts/init_gbq_tables.py <dev, stg, prod>")
         sys.exit(1)
 
     print(f"\nConstructing BigQuery Database for {sys.argv[1]}-environment")
@@ -60,7 +95,7 @@ def main():
     location = os.getenv("GCP_LOCATION")
     dataset_id = os.getenv("GCP_BQ_DATASET") + "_" + sys.argv[1]
 
-    # 3. Initializea BigQuery client object for Creating Non-Existant Databasets/Tables
+    # 3. Initialize BigQuery client object for creating non-existing datasets/tables
     client = bigquery.Client()
 
     # 4. Construct a Dataset object to send to the API.
