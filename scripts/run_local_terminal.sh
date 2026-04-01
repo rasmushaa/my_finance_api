@@ -21,6 +21,10 @@ load_env() {
 # Load environment variables
 load_env
 
+# Refresh local dev tokens in .env
+echo "Refreshing local dev tokens..."
+uv run python scripts/create_local_dev_tokens.py
+
 # Run the FastAPI application using Uvicorn
 echo "Starting FastAPI application with Uvicorn..."
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8081 --reload

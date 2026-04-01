@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from google.cloud import bigquery
 from google.cloud.exceptions import Conflict
 
-# How to run: python3 init_bigquery_database.py <name of the environment, dev, stg, prod, etc.>
+# How to run: uv run python scripts/init_gbq_tables.py <name of the environment, dev, stg, prod, etc.>
 
 
 BASIC_META_COLS = [
@@ -123,6 +123,12 @@ def main():
             "STRING",
             mode="REQUIRED",
             description="Reporting level name of the category, e.g. groceries, salary, rent, etc.",
+        ),
+        bigquery.SchemaField(
+            "CategoryComment",
+            "STRING",
+            mode="REQUIRED",
+            description="Comment or additional information about the category content.",
         ),
     ] + BASIC_META_COLS
     __create_table(dataset, "d_category", schema, client)

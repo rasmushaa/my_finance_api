@@ -14,7 +14,7 @@ os.environ["APP_JWT_EXP_DELTA_MINUTES"] = "60"
 JWT_TEST_SECRET = "test-secret-key-for-jwt-testing"
 JWT_EXP_MINUTES = 60
 
-from app.core.exceptions.auth import UserNotFoundError
+from app.core.errors.auth import UserNotFoundError
 from app.services.jwt import AppJwtService
 
 

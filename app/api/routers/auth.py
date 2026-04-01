@@ -3,29 +3,13 @@ import logging
 from fastapi import APIRouter, Depends
 
 from app.api.dependencies.providers import get_google_oauth_service, get_jwt_service
-from app.core.exceptions.auth import (
-    AuthRateLimitExceededError,
-    CodeExchangeError,
-    InvalidIdTokenError,
-    MissingEmailError,
-    MissingIdTokenError,
-    UserNotFoundError,
-)
+from app.core.errors.auth import AuthRateLimitExceededError
 from app.core.rate_limiter import EmailRateLimiter
 from app.schemas.auth import GoogleCodeExchangeRequest, GoogleCodeExchangeResponse
 from app.services.google_oauth import GoogleOAuthService
 from app.services.jwt import AppJwtService as JWTService
 
 logger = logging.getLogger(__name__)
-
-# Map all auth related failures to hide specific details from potential attackers
-AUTH_FAILURE_EXCEPTIONS = (
-    CodeExchangeError,
-    MissingIdTokenError,
-    InvalidIdTokenError,
-    MissingEmailError,
-    UserNotFoundError,
-)
 
 # User can try to log once to prevent spam to database, but this is still enough for legitimate users
 _auth_limiter = EmailRateLimiter(max_requests=1, window_seconds=60)
@@ -61,23 +45,17 @@ def auth_google_code(
     - **CodeExchangeError**: For any possible failure during the code exchange process,
         including invalid code, token exchange failure, or user not found.
     """
-    try:
-        info = google_oauth_service.exchange_code_for_id_token(
-            request.code, request.redirect_uri
+    info = google_oauth_service.exchange_code_for_id_token(
+        request.code, request.redirect_uri
+    )
+
+    email = info["email"]  # Rate limit by validated google email
+    if not _auth_limiter.check(email):
+        raise AuthRateLimitExceededError(
+            email=email, cooldown_seconds=_auth_limiter.window_seconds
         )
 
-        email = info["email"]  # Rate limit by validated google email
-        if not _auth_limiter.check(email):
-            raise AuthRateLimitExceededError(
-                email=email, cooldown_seconds=_auth_limiter.window_seconds
-            )
-
-        jwt_token = jwt_service.authenticate(email=email)
-
-    except (
-        AUTH_FAILURE_EXCEPTIONS
-    ):  # Hide specific failure reasons to prevent information leakage
-        raise CodeExchangeError()
+    jwt_token = jwt_service.authenticate(email=email)
 
     return GoogleCodeExchangeResponse(
         encoded_token=jwt_token,

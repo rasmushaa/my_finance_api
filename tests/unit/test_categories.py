@@ -35,20 +35,20 @@ def create_test_categories_db() -> pd.DataFrame:
     """Create realistic test data for categories."""
     return pd.DataFrame(
         {
-            "Name": [
+            "CategoryName": [
                 "Food",
                 "Transport",
                 "Entertainment",
-                "Food",  # Duplicate for GROUP BY testing
+                "Food",  # Duplicate
                 "Stocks",
                 "Bonds",
                 "Real Estate",
                 "Cash",
-                "Stocks",  # Duplicate for GROUP BY testing
+                "Stocks",  # Duplicate
                 "DeletedFood",  # Soft-deleted transaction
                 "DeletedStock",  # Soft-deleted asset
             ],
-            "Type": [
+            "CategoryGroup": [
                 "transaction",
                 "transaction",
                 "transaction",
@@ -60,6 +60,19 @@ def create_test_categories_db() -> pd.DataFrame:
                 "asset",
                 "transaction",
                 "asset",
+            ],
+            "CategoryComment": [
+                "All food-related expenses",
+                "Transportation costs",
+                "Entertainment and leisure",
+                "All food-related expenses",  # Duplicate comment
+                "Stock investments",
+                "Bond investments",
+                "Real estate investments",
+                "Cash holdings",
+                "Stock investments",  # Duplicate comment
+                "Soft-deleted food category",
+                "Soft-deleted stock category",
             ],
             "_RowStatus": ["i", "i", "i", "i", "i", "i", "i", "i", "i", "d", "d"],
         }
@@ -101,20 +114,20 @@ def test_categories_service_with_real_sql_execution(setup_categories_env):
 
     # Test expenditure categories - should be deduplicated by GROUP BY and exclude soft-deleted
     expenditure_result = service.get_expenditure_categories()
+    print(expenditure_result)
+    expenditure_result = [row["name"] for row in expenditure_result]
     expected_expenditure = [
-        "Entertainment",
         "Food",
         "Transport",
-    ]  # DuckDB sorts by default
-    assert sorted(expenditure_result) == expected_expenditure
-    assert (
-        len(expenditure_result) == 3
-    )  # Duplicates removed by GROUP BY, soft-deleted excluded
+        "Entertainment",
+    ]
+    assert sorted(expenditure_result) == sorted(expected_expenditure)
+    assert len(expenditure_result) == 3
 
     # Test asset categories - should be deduplicated by GROUP BY and exclude soft-deleted
     asset_result = service.get_asset_categories()
+    print(asset_result)
+    asset_result = [row["name"] for row in asset_result]
     expected_assets = ["Bonds", "Cash", "Real Estate", "Stocks"]
-    assert sorted(asset_result) == expected_assets
-    assert (
-        len(asset_result) == 4
-    )  # Duplicates removed by GROUP BY, soft-deleted excluded
+    assert sorted(asset_result) == sorted(expected_assets)
+    assert len(asset_result) == 4

@@ -7,8 +7,8 @@ from app.core.container import (
     get_services_requiring_shutdown,
     get_services_requiring_startup,
 )
-from app.core.exceptions.base import AppError
-from app.core.handlers import app_error_handler
+from app.core.errors.base_error import AppError
+from app.core.errors.handlers import app_error_handler
 from app.core.setup_logging import setup_logging
 
 setup_logging(level=logging.INFO)

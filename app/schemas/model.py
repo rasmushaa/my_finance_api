@@ -3,7 +3,7 @@ from typing import Any, Dict, List
 import pandas as pd
 from pydantic import BaseModel, Field
 
-from app.core.exceptions.model import ModelInputError
+from app.core.errors.domain import ModelInputError
 
 CANONICAL_FEATURES = [
     "date",

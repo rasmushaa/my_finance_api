@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.dependencies.providers import get_model_store, get_require_admin
-from app.core.exceptions.base import ErrorCodes
+from app.core.errors.base_error import ErrorCode
 from app.main import app
 
 # Container needs JWT, which needs environment variables
@@ -99,7 +99,7 @@ def test_predict_endpoint_missing_feature():
     }
     response = client.post("/model/predict", json=request_payload)
     assert response.status_code == 400
-    assert response.json()["code"] == ErrorCodes.ML_ERROR.value
+    assert response.json()["code"] == ErrorCode.INVALID_INPUT
 
 
 # Test predict endpoint with extra features
@@ -120,7 +120,7 @@ def test_predict_endpoint_extra_feature():
     response = client.post("/model/predict", json=request_payload)
     print(response.json())
     assert response.status_code == 400
-    assert response.json()["code"] == ErrorCodes.ML_ERROR.value
+    assert response.json()["code"] == ErrorCode.INVALID_INPUT
 
 
 # Test model info endpoint - when ready
