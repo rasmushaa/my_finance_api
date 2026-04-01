@@ -85,6 +85,7 @@ repos:
         args: [--ignore-missing-imports, --no-strict-optional]
         additional_dependencies:
           - types-requests
+          - types-PyYAML
         exclude: ^tests/
 
 

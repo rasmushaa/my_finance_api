@@ -29,6 +29,9 @@ def create_test_users_db() -> pd.DataFrame:
                 "user",
             ],
             "_RowStatus": ["i", "i", "i", "i", "i", "d"],
+            "_RowCreatedAt": [pd.Timestamp("2024-01-01 00:00:00")] * 6,
+            "_RowUpdatedAt": [pd.Timestamp("2024-01-01 00:00:00")] * 6,
+            "_RowUploadHash": [101, 102, 103, 104, 105, 106],
         }
     )
 

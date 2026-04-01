@@ -25,6 +25,9 @@ def create_test_filetypes_db() -> pd.DataFrame:
             "AmountColumn": ["Amount", "Amount"],
             "ReceiverColumn": ["Receiver", "Receiver"],
             "_RowStatus": ["i", "d"],
+            "_RowCreatedAt": [pd.Timestamp("2024-01-01 00:00:00")] * 2,
+            "_RowUpdatedAt": [pd.Timestamp("2024-01-01 00:00:00")] * 2,
+            "_RowUploadHash": [201, 202],
         }
     )
 

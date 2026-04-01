@@ -35,6 +35,9 @@ def seed_filetypes_matching_sample_csv() -> pd.DataFrame:
             "AmountColumn": ["amount"],
             "ReceiverColumn": ["receiver"],
             "_RowStatus": ["i"],
+            "_RowCreatedAt": [pd.Timestamp("2024-01-01 00:00:00")],
+            "_RowUpdatedAt": [pd.Timestamp("2024-01-01 00:00:00")],
+            "_RowUploadHash": [301],
         }
     )
 
@@ -116,6 +119,9 @@ def test_import_csv_unknown_filetype_error_returns_400():
                     "AmountColumn": ["Amount"],
                     "ReceiverColumn": ["Receiver"],
                     "_RowStatus": ["i"],
+                    "_RowCreatedAt": [pd.Timestamp("2024-01-01 00:00:00")],
+                    "_RowUpdatedAt": [pd.Timestamp("2024-01-01 00:00:00")],
+                    "_RowUploadHash": [302],
                 }
             )
         },

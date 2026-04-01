@@ -19,6 +19,7 @@ dependencies = [
     "uvicorn>=0.40.0",
     "chardet>=7.3.0",
     "python-multipart>=0.0.22",
+    "pyyaml>=6.0.0",
 ]
 
 [dependency-groups]
