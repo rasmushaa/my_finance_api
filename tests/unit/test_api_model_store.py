@@ -1,72 +1,16 @@
-import os
 from unittest.mock import patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 from app.api.dependencys import get_model_store, get_require_admin
 from app.core.errors.base_error import ErrorCode
 from app.main import app
-
-# Container needs JWT, which needs environment variables
-os.environ["APP_JWT_SECRET"] = "test-secret-key-for-jwt-testing"
-os.environ["APP_JWT_EXP_DELTA_MINUTES"] = "60"
-
-
-# --------------- Mock Model Store and Dummy Model for Testing ----------------
-class DummyModel:
-    def predict(self, df):
-        return ["class_a"] * len(df)
-
-
-class DummyStore:
-    def __init__(self, is_ready=True, error_message=None):
-        self._model = DummyModel() if is_ready else None
-        self._model_info = (
-            {
-                "model_name": "test_model",
-                "alias": "test_alias",
-                "version": 1,
-                "run_id": "test_run_123",
-                "description": "Test model for unit tests",
-                "package_version": "1.0.0",
-                "commit_sha": "abc123def456",
-                "model_features": "a,b,c",
-                "model_architecture": "RandomForest",
-            }
-            if is_ready
-            else {}
-        )
-
-    def predict(self, input_df):
-        return self._model.predict(input_df)
-
-    @property
-    def metadata(self):
-        return self._model_info
+from tests.helpers.fake_services import FakeModelService
 
 
 # ------------------ Mock Dependency Overrides for Authentication and Model Store ------------------
 def override_store():
-    return DummyStore()
-
-
-def mock_require_user():
-    return {"user_id": "test_user", "username": "testuser"}
-
-
-def mock_require_role():
-    def _mock_role():
-        return {"user_id": "test_admin", "role": "admin"}
-
-    return _mock_role
-
-
-@pytest.fixture(autouse=True)
-def cleanup_overrides():
-    yield
-    # Clean up after tests
-    app.dependency_overrides.clear()
+    return FakeModelService(predictions=["class_a"])
 
 
 # Test predict endpoint

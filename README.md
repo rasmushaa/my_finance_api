@@ -1,162 +1,170 @@
-
-
 # My Finance API
 
-A modern FastAPI-based REST API for financial data management with integrated ML model serving capabilities. Built with clean architecture principles, comprehensive authentication.
+FastAPI backend for personal finance ingestion and ML-assisted transaction categorization.
 
-[![Docs](https://img.shields.io/badge/Swagger-Docs-blue.svg)](https://my-finance-api-prod-109245832287.europe-north1.run.app/docs)
-[![Tests](https://github.com/rasmushaa/my_finance_api/actions/workflows/deploy.yml/badge.svg)](https://github.com/rasmushaa/my_finance_api/actions/workflows/deploy.yml)
+This is a hobby project deployed publicly on Google Cloud Run. The codebase follows pragmatic architecture patterns (DI container, typed settings, explicit schemas) without claiming full enterprise production hardening.
 
-## Architecture
+[![Swagger](https://img.shields.io/badge/Swagger-Docs-blue.svg)](https://my-finance-api-prod-109245832287.europe-north1.run.app/docs)
+[![CI](https://github.com/rasmushaa/my_finance_api/actions/workflows/deploy.yml/badge.svg)](https://github.com/rasmushaa/my_finance_api/actions/workflows/deploy.yml)
 
-### Clean Architecture Design
-- **Layered Architecture**: Clear separation between API, business logic, and data layers
-- **Dependency Injection**: Container-based DI system for loose coupling and testability
-- **Protocol-based Design**: Type-safe interfaces for service contracts
-- **Exception Handling**: Comprehensive error management with structured responses
+## Tech Stack
 
-### Core Components
-- **API Layer** (`app/api/`): FastAPI routers, dependencies, and request/response handling
-- **Business Logic** (`app/services/`): Domain services for categories, authentication, ML models, and users
-- **Core Infrastructure** (`app/core/`): Security, error handling, database clients, and DI container
-- **Data Contracts** (`app/schemas/`): Pydantic models for API requests, responses, and data validation
+- Python 3.11
+- FastAPI + Pydantic
+- Google BigQuery
+- MLflow-managed model artifacts
+- Dependency management with `uv`
+- Testing with `pytest` + DuckDB-backed mock client
 
-## Project Structure
+## Project Layout
 
-```
+```text
 app/
-├── main.py                   # FastAPI application entry point
-├── api/                      # API layer
-│   ├── routers/              # Route handlers by feature
-│   └── dependencies/         # FastAPI dependency providers
-├── core/                     # Core infrastructure
-│   └── exceptions/           # Structured exception hierarchy
-├── services/                 # Business logic services
-└── schemas/                  # Data contracts and validation
-tests/                        # Comprehensive test suite
-scripts/                      # Development and deployment scripts
+  api/                # Routers and dependency providers
+  core/               # DI container, db client, settings, security, errors
+  schemas/            # Pydantic request/response contracts
+  services/           # Business logic
+config/
+  bigquery_tables.yaml # BigQuery table schema source-of-truth
+scripts/
+  init_gbq_tables.py   # Creates BigQuery tables from YAML schema
+  bigquery_table_config.py
+  load_model_artifacts.py
+tests/
+  unit/
+  integration/
+  helpers/
 ```
 
-## Key Features
+## Architecture Notes
 
-### Authentication & Authorization
-- **Google OAuth 2.0**: Secure authentication via Google accounts
-- **JWT Tokens**: Stateless authentication with configurable expiration
-- **Role-based Access Control**: Admin and user role enforcement
-- **Security Middleware**: Bearer token validation with custom error handling
+- Dependency wiring is centralized in `app/core/container.py`.
+- Runtime settings are typed (`app/core/settings.py`) and loaded from env vars.
+- API contracts live in `app/schemas/`.
+- Domain and infrastructure errors are unified under `AppError` and mapped to consistent HTTP responses.
+- BigQuery table schema is defined once in `config/bigquery_tables.yaml` and consumed by scripts/tests.
 
-### ML Model Integration
-- **Async Model Loading**: Non-blocking model initialization with MLflow integration
-- **Model Versioning**: Complete metadata tracking and version management
-- **Feature Validation**: Input validation against canonical feature sets
-- **Health Monitoring**: Model status and readiness checks
-- **Prediction API**: High-performance inference endpoints
+## BigQuery Schema Source-of-Truth
 
-### Error Handling & Observability
-- **Structured Errors**: Consistent error response format across all endpoints
-- **Error Codes**: Machine-readable error categorization
-- **Comprehensive Logging**: Detailed request/response logging
-- **Health Checks**: Application and dependency health monitoring
+`config/bigquery_tables.yaml` is the canonical schema contract for:
 
-### Data Management
-- **BigQuery Integration**: Cloud-native data storage and querying
-- **Category Management**: Financial transaction categorization
-- **User Management**: Profile and preference handling
+1. Table initialization via `scripts/init_gbq_tables.py`
+2. Test mock-table validation in `tests/helpers/duckdb_mock_client.py`
 
-## Development Setup
+If a table schema changes, update this YAML first, then update service logic and tests.
+
+## Local Development
 
 ### Prerequisites
-- Python 3.11+
-- uv package manager
-- Google Cloud CLI (for private packages and authentication)
 
-### Installation
+- Python 3.11
+- `uv`
+- `gcloud` CLI authenticated for private package index and GCP access
+
+### Install Dependencies
+
 ```bash
-# Install dependencies with private registry access
 ./scripts/uv_sync.sh
-
-# Or manually with authentication
-TOKEN="$(gcloud auth print-access-token)"
-uv sync --extra-index-url "https://oauth2accesstoken:${TOKEN}@europe-north1-python.pkg.dev/rasmus-prod/python-packages/simple/"
 ```
 
-### Environment Configuration
+Alternative manual install:
+
 ```bash
-# Required environment variables
+TOKEN="$(gcloud auth print-access-token)"
+uv sync --group dev \
+  --extra-index-url "https://oauth2accesstoken:${TOKEN}@europe-north1-python.pkg.dev/rasmus-prod/python-packages/simple/"
+```
+
+### Environment Variables
+
+Minimum runtime variables:
+
+```bash
 export APP_JWT_SECRET="your-jwt-secret"
 export APP_JWT_EXP_DELTA_MINUTES="60"
-export GOOGLE_OAUTH_CLIENT_ID="your-oauth-client-id"
-export GOOGLE_OAUTH_CLIENT_SECRET="your-oauth-client-secret"
+export GOOGLE_OAUTH_CLIENT_ID="your-google-client-id"
+export GOOGLE_OAUTH_CLIENT_SECRET="your-google-client-secret"
+export GCP_BQ_DATASET="your_dataset_base"
+export ENV="dev"
 ```
 
-### Running the API
+Optional but recommended:
 
-#### Development Server
 ```bash
-# Using provided script
-./scripts/run_local_terminal.sh
+export GCP_PROJECT_ID="your-gcp-project"
+export GCP_LOCATION="europe-north1"
+```
 
-# Or directly with uvicorn
+### Run API Locally
+
+```bash
+./scripts/run_local_terminal.sh
+```
+
+Or directly:
+
+```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-#### Docker Deployment
-```bash
-# Local containerized deployment
-./scripts/run_local_docker.sh
+### Initialize BigQuery Tables
 
-# Or build and run manually
-docker build -t my-finance-api .
-docker run -p 8000:8000 my-finance-api
+```bash
+uv run python scripts/init_gbq_tables.py dev
 ```
 
-### Testing Strategy
+Supported environments: `dev`, `stg`, `prod`.
 
-#### Running Tests
+## Testing
+
+### Run Unit-Focused Suite (default in CI)
+
 ```bash
-# Run all tests
-pytest
-
-# Unit tests for business logic
-pytest tests/test_*.py -v
-
-# API integration tests
-pytest tests/test_api_*.py -v
-
-# With coverage
-pytest --cov=app tests/
+uv run pytest -m "not integration"
 ```
 
-#### Test Architecture
-- **Unit Tests**: Service-level testing with dependency mocking
-- **Integration Tests**: End-to-end API testing with TestClient
-- **Dependency Injection**: Container-based mocking for isolated testing
-- **Authentication Testing**: Mock auth providers for secure endpoint testing
+If private index auth blocks `uv run` in a local shell, use existing venv:
 
-## API Documentation
+```bash
+.venv/bin/pytest -m "not integration"
+```
 
-### Interactive Documentation
-- **Swagger UI**: Available at `http://localhost:8000/docs`
-- **ReDoc**: Available at `http://localhost:8000/redoc`
+### Run Integration Tests
 
-### Main Endpoints
-- `POST /auth/google/code` - Google OAuth code exchange
-- `GET /data/categories/{type}` - Financial category retrieval
-- `POST /model/predict` - ML model predictions
-- `GET /model/status` - Model health and readiness
-- `GET /model/metadata` - Model version and information
-- `GET /health` - Application health check
+```bash
+uv run pytest -m integration -s
+```
 
-## Deployment Considerations
+## API Endpoints (v1)
 
-### Production Configuration
-- Environment-based configuration management
-- Structured logging with appropriate levels
-- Health check endpoints for load balancer integration
-- Graceful shutdown handling for ML model cleanup
+Base prefix: `/app/v1`
 
-### Scalability Features
-- Async request handling
-- Singleton pattern for heavy resources (ML models, DB connections)
-- Lazy loading of dependencies
-- Background task support for model loading
+- `GET /health/`
+- `POST /auth/google/code`
+- `POST /model/predict` (admin)
+- `GET /model/metadata` (admin)
+- `GET /transactions/labels` (user)
+- `POST /transactions/transform` (user)
+- `POST /transactions/upload` (user)
+- `POST /transactions/register-filetype` (admin)
+- `POST /transactions/delete-filetype` (admin)
+- `POST /assets/upload` (user)
+
+Interactive docs:
+
+- Swagger: `/docs`
+- ReDoc: `/redoc`
+
+## CI/CD
+
+Single GitHub Actions workflow (`.github/workflows/deploy.yml`):
+
+- `main`: run tests + deploy Cloud Run (`prod`)
+- `stg`: run tests + deploy Cloud Run (`stg`)
+- `feature/*`: run tests only
+
+## Documentation Conventions
+
+- Python docstrings use NumPy style.
+- Router endpoint docstrings use Markdown sections so Swagger descriptions stay readable.
+- Keep docs aligned with actual code and schema contracts.

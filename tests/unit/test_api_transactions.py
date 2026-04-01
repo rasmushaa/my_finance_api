@@ -1,10 +1,8 @@
-"""Test FastAPI IO endpoints using DI container pattern."""
+"""Test FastAPI transaction endpoints with real service and mocked DB client."""
 
 import io
-import os
 
 import pandas as pd
-import pytest
 from fastapi.testclient import TestClient
 
 from app.api.dependencys import (
@@ -12,104 +10,70 @@ from app.api.dependencys import (
     get_require_user,
     get_transaction_service,
 )
-from app.core.errors.domain import ModelInputError, UnknownFileTypeError
+from app.core.errors.domain import ModelInputError
 from app.main import app
-
-# Container needs JWT, which needs environment variables
-os.environ["APP_JWT_SECRET"] = "test-secret-key-for-jwt-testing"
-os.environ["APP_JWT_EXP_DELTA_MINUTES"] = "60"
+from app.services.transactions import TransactionService
+from tests.helpers.duckdb_mock_client import DuckDBMockClient
+from tests.helpers.fake_services import FakeModelService
 
 # --------------- Sample CSV data ---------------
 SAMPLE_CSV = (
     "date,receiver,amount\n2024-01-01,Grocery Store,-25.50\n2024-01-02,Salary,2000.00\n"
 )
 SAMPLE_PREDICTIONS = ["Food", "Income"]
+DATASET = "test_dataset_dev"
 
 
-# --------------- Mock Services ---------------
-class MockModelStore:
-    """Mock model service that returns predefined predictions."""
-
-    def __init__(self, predictions: list | None = None, should_fail: bool = False):
-        self.predictions = (
-            predictions if predictions is not None else SAMPLE_PREDICTIONS
-        )
-        self.should_fail = should_fail
-
-    def predict(self, input_df: pd.DataFrame) -> list:
-        if self.should_fail:
-            raise ModelInputError(
-                details={"message": "Input features missing required model features."}
-            )
-        return self.predictions
-
-
-class MockIOService:
-    """Mock IO service with an embedded MockModelStore."""
-
-    def __init__(
-        self,
-        result_df: pd.DataFrame | None = None,
-        io_should_fail: bool = False,
-        model_store: MockModelStore | None = None,
-    ):
-        self.result_df = (
-            result_df
-            if result_df is not None
-            else pd.DataFrame(
-                {
-                    "date": ["2024-01-01", "2024-01-02"],
-                    "receiver": ["Grocery Store", "Salary"],
-                    "amount": [-25.50, 2000.00],
-                }
-            )
-        )
-        self.io_should_fail = io_should_fail
-        self.model_service = (
-            model_store if model_store is not None else MockModelStore()
-        )
-
-    def transform_input_file(self, file) -> pd.DataFrame:
-        if self.io_should_fail:
-            raise UnknownFileTypeError(details={"reason": "Unrecognised file format"})
-        df = self.result_df.copy()
-        df["Category"] = self.model_service.predict(df)
-        return df
-
-    def add_filetype_to_database(self, **kwargs):
-        self.last_registered = kwargs
+def seed_filetypes_matching_sample_csv() -> pd.DataFrame:
+    """Seed d_filetypes so SAMPLE_CSV can be transformed by TransactionService."""
+    return pd.DataFrame(
+        {
+            "FileID": ["date-receiver-amount"],
+            "FileName": ["Sample CSV"],
+            "DateColumn": ["date"],
+            "DateColumnFormat": ["%Y-%m-%d"],
+            "AmountColumn": ["amount"],
+            "ReceiverColumn": ["receiver"],
+            "_RowStatus": ["i"],
+            "_RowCreatedAt": [pd.Timestamp("2024-01-01 00:00:00")],
+            "_RowUpdatedAt": [pd.Timestamp("2024-01-01 00:00:00")],
+            "_RowUploadHash": [301],
+        }
+    )
 
 
-# --------------- Dependency Override Factories ---------------
-def override_io_service():
-    return MockIOService()
-
-
-def override_io_service_unknown_filetype():
-    return MockIOService(io_should_fail=True)
-
-
-def override_io_service_model_failing():
-    return MockIOService(model_store=MockModelStore(should_fail=True))
+def build_transaction_service(
+    *,
+    db_client: DuckDBMockClient,
+    predictions: list[str] | None = None,
+    model_error: Exception | None = None,
+) -> TransactionService:
+    model = FakeModelService(
+        predictions=predictions or SAMPLE_PREDICTIONS,
+        error=model_error,
+        metadata={
+            "model_name": "test_model",
+            "alias": "dev",
+            "version": 1,
+            "run_id": "run-1",
+            "description": "test",
+            "package_version": "1.0.0",
+            "commit_sha": "abc123",
+            "model_features": "date,receiver,amount",
+            "model_architecture": "RandomForest",
+        },
+    )
+    return TransactionService(db_client=db_client, model_service=model)
 
 
 def mock_require_user():
-    return {"user_id": "test_user", "username": "testuser"}
+    return {"user_id": "test_user", "sub": "user@example.com"}
 
 
 def mock_require_admin():
-    return {"user_id": "admin_user", "username": "adminuser", "role": "admin"}
+    return {"user_id": "admin_user", "sub": "admin@example.com", "role": "admin"}
 
 
-# --------------- Fixtures ---------------
-@pytest.fixture(autouse=True)
-def cleanup_overrides():
-    """Ensure clean dependency state for each test."""
-    yield
-    app.dependency_overrides.clear()
-
-
-# --------------- Helper ---------------
 def _make_csv_upload(
     content: str = SAMPLE_CSV,
     content_type: str = "text/csv",
@@ -118,35 +82,54 @@ def _make_csv_upload(
     return ("file", (filename, io.BytesIO(content.encode()), content_type))
 
 
-# --------------- Tests ---------------
+# --------------- Tests: transform/upload ---------------
 def test_import_csv_success():
-    """Test that a valid CSV upload returns a processed CSV with predicted
-    categories."""
+    db_client = DuckDBMockClient(
+        dataset=DATASET,
+        seed_tables={"d_filetypes": seed_filetypes_matching_sample_csv()},
+    )
+    service = build_transaction_service(db_client=db_client)
+
     app.dependency_overrides[get_require_user] = mock_require_user
-    app.dependency_overrides[get_transaction_service] = override_io_service
+    app.dependency_overrides[get_transaction_service] = lambda: service
 
     client = TestClient(app)
     response = client.post("/app/v1/transactions/transform", files=[_make_csv_upload()])
 
-    # Validate response metadata and headers
     assert response.status_code == 200
     assert response.headers["content-type"] == "text/csv; charset=utf-8"
     assert (
         'attachment; filename="processed_transactions.csv"'
         in response.headers["content-disposition"]
     )
-    assert "x-row-count" in response.headers
     assert int(response.headers["x-row-count"]) == 2
-    assert "x-columns" in response.headers
     assert "Category" in response.headers["x-columns"].split(",")
 
 
 def test_import_csv_unknown_filetype_error_returns_400():
-    """Test that an unrecognised CSV structure from IOService returns a 400 error."""
-    app.dependency_overrides[get_require_user] = mock_require_user
-    app.dependency_overrides[get_transaction_service] = (
-        override_io_service_unknown_filetype
+    db_client = DuckDBMockClient(
+        dataset=DATASET,
+        seed_tables={
+            "d_filetypes": pd.DataFrame(
+                {
+                    "FileID": ["different-schema"],
+                    "FileName": ["Other CSV"],
+                    "DateColumn": ["Date"],
+                    "DateColumnFormat": ["%Y-%m-%d"],
+                    "AmountColumn": ["Amount"],
+                    "ReceiverColumn": ["Receiver"],
+                    "_RowStatus": ["i"],
+                    "_RowCreatedAt": [pd.Timestamp("2024-01-01 00:00:00")],
+                    "_RowUpdatedAt": [pd.Timestamp("2024-01-01 00:00:00")],
+                    "_RowUploadHash": [302],
+                }
+            )
+        },
     )
+    service = build_transaction_service(db_client=db_client)
+
+    app.dependency_overrides[get_require_user] = mock_require_user
+    app.dependency_overrides[get_transaction_service] = lambda: service
 
     client = TestClient(app)
     response = client.post("/app/v1/transactions/transform", files=[_make_csv_upload()])
@@ -155,11 +138,19 @@ def test_import_csv_unknown_filetype_error_returns_400():
 
 
 def test_import_csv_model_input_error_returns_400():
-    """Test that a model prediction failure due to bad features returns a 400 error."""
-    app.dependency_overrides[get_require_user] = mock_require_user
-    app.dependency_overrides[get_transaction_service] = (
-        override_io_service_model_failing
+    db_client = DuckDBMockClient(
+        dataset=DATASET,
+        seed_tables={"d_filetypes": seed_filetypes_matching_sample_csv()},
     )
+    service = build_transaction_service(
+        db_client=db_client,
+        model_error=ModelInputError(
+            details={"message": "Input features missing required model features."}
+        ),
+    )
+
+    app.dependency_overrides[get_require_user] = mock_require_user
+    app.dependency_overrides[get_transaction_service] = lambda: service
 
     client = TestClient(app)
     response = client.post("/app/v1/transactions/transform", files=[_make_csv_upload()])
@@ -168,9 +159,13 @@ def test_import_csv_model_input_error_returns_400():
 
 
 def test_import_csv_unauthorized():
-    """Test that the endpoint rejects requests without authentication."""
-    app.dependency_overrides.clear()
-    app.dependency_overrides[get_transaction_service] = override_io_service
+    db_client = DuckDBMockClient(
+        dataset=DATASET,
+        seed_tables={"d_filetypes": seed_filetypes_matching_sample_csv()},
+    )
+    service = build_transaction_service(db_client=db_client)
+
+    app.dependency_overrides[get_transaction_service] = lambda: service
 
     client = TestClient(app)
     response = client.post("/app/v1/transactions/transform", files=[_make_csv_upload()])
@@ -178,8 +173,7 @@ def test_import_csv_unauthorized():
     assert response.status_code in [401, 422]
 
 
-# --------------- register_filetype tests ---------------
-
+# --------------- Tests: register-filetype ---------------
 VALID_FILETYPE_PAYLOAD = {
     "cols": ["Date", "Amount", "Receiver"],
     "file_name": "Test Bank CSV",
@@ -191,10 +185,14 @@ VALID_FILETYPE_PAYLOAD = {
 
 
 def test_register_filetype_success():
-    """Admin user with valid payload receives 200 and the service method is called."""
-    mock_io = MockIOService()
+    db_client = DuckDBMockClient(
+        dataset=DATASET,
+        seed_tables={"d_filetypes": seed_filetypes_matching_sample_csv()},
+    )
+    service = build_transaction_service(db_client=db_client)
+
     app.dependency_overrides[get_require_admin] = mock_require_admin
-    app.dependency_overrides[get_transaction_service] = lambda: mock_io
+    app.dependency_overrides[get_transaction_service] = lambda: service
 
     client = TestClient(app)
     response = client.post(
@@ -202,16 +200,32 @@ def test_register_filetype_success():
     )
 
     assert response.status_code == 200
-    assert mock_io.last_registered["file_name"] == "Test Bank CSV"
-    assert mock_io.last_registered["date_col"] == "Date"
-    assert mock_io.last_registered["amount_col"] == "Amount"
-    assert mock_io.last_registered["receiver_col"] == "Receiver"
+
+    inserted = db_client.sql_to_pandas(
+        f"""
+        SELECT
+            *
+        FROM
+            `{DATASET}.d_filetypes`
+        WHERE
+            FileName = 'Test Bank CSV'
+            AND _RowStatus != 'd'
+        """
+    )
+    assert len(inserted) == 1
+    assert inserted.iloc[0]["DateColumn"] == "Date"
+    assert inserted.iloc[0]["AmountColumn"] == "Amount"
+    assert inserted.iloc[0]["ReceiverColumn"] == "Receiver"
 
 
 def test_register_filetype_unauthorized():
-    """Request without any auth token is rejected before reaching the service."""
-    app.dependency_overrides.clear()
-    app.dependency_overrides[get_transaction_service] = override_io_service
+    db_client = DuckDBMockClient(
+        dataset=DATASET,
+        seed_tables={"d_filetypes": seed_filetypes_matching_sample_csv()},
+    )
+    service = build_transaction_service(db_client=db_client)
+
+    app.dependency_overrides[get_transaction_service] = lambda: service
 
     client = TestClient(app)
     response = client.post(
@@ -222,10 +236,14 @@ def test_register_filetype_unauthorized():
 
 
 def test_register_filetype_forbidden_for_regular_user():
-    """A non-admin authenticated user must not be able to register file types."""
+    db_client = DuckDBMockClient(
+        dataset=DATASET,
+        seed_tables={"d_filetypes": seed_filetypes_matching_sample_csv()},
+    )
+    service = build_transaction_service(db_client=db_client)
+
     app.dependency_overrides[get_require_user] = mock_require_user
-    app.dependency_overrides[get_transaction_service] = override_io_service
-    # get_require_admin is NOT overridden — real check runs and should reject
+    app.dependency_overrides[get_transaction_service] = lambda: service
 
     client = TestClient(app)
     response = client.post(
@@ -236,10 +254,14 @@ def test_register_filetype_forbidden_for_regular_user():
 
 
 def test_register_filetype_invalid_payload_returns_422():
-    """Missing required fields return a 422 Unprocessable Entity from FastAPI
-    validation."""
+    db_client = DuckDBMockClient(
+        dataset=DATASET,
+        seed_tables={"d_filetypes": seed_filetypes_matching_sample_csv()},
+    )
+    service = build_transaction_service(db_client=db_client)
+
     app.dependency_overrides[get_require_admin] = mock_require_admin
-    app.dependency_overrides[get_transaction_service] = override_io_service
+    app.dependency_overrides[get_transaction_service] = lambda: service
 
     client = TestClient(app)
     response = client.post(

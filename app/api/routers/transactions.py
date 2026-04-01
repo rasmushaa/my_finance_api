@@ -36,6 +36,15 @@ def get_transaction_labels(
     transaction_service: TransactionService = Depends(get_transaction_service),
     user: dict = Depends(get_require_user),
 ):
+    """Return supported transaction labels and descriptions.
+
+    ## Parameters
+    - **transaction_service** (`TransactionService`): Service providing label mapping.
+    - **user** (`dict`): Authenticated user payload.
+
+    ## Returns
+    - **TransactionLabelResponse**: Label dictionary used by clients/UI.
+    """
     labels = transaction_service.get_transaction_labels()
     return TransactionLabelResponse(labels=labels)
 
@@ -56,6 +65,20 @@ def transform_csv(
     transaction_service: TransactionService = Depends(get_transaction_service),
     user: dict = Depends(get_require_user),
 ):
+    """Normalize an input CSV and attach predicted transaction categories.
+
+    ## Parameters
+    - **file** (`UploadFile`): Input CSV file.
+    - **transaction_service** (`TransactionService`): CSV transform and prediction service.
+    - **user** (`dict`): Authenticated user payload.
+
+    ## Returns
+    - **Response**: CSV file stream with transformed rows and metadata headers.
+
+    ## Raises
+    - **InputValidationError**: If uploaded content type is invalid.
+    - **UnknownFileTypeError**: If schema is not registered in known file types.
+    """
     # Validate content type using CSVImportRequest contract
     CSVImportRequest(content_type=file.content_type or "")
 
@@ -101,6 +124,16 @@ def upload_transactions(
     transaction_service: TransactionService = Depends(get_transaction_service),
     user: dict = Depends(get_require_user),
 ):
+    """Upload already-transformed transactions into the main table.
+
+    ## Parameters
+    - **file** (`UploadFile`): Input CSV file in normalized transaction format.
+    - **transaction_service** (`TransactionService`): Upload service.
+    - **user** (`dict`): Authenticated user payload.
+
+    ## Returns
+    - **Response**: Success message with HTTP 200.
+    """
     # Validate content type using CSVImportRequest contract
     CSVImportRequest(content_type=file.content_type or "")
 
@@ -121,6 +154,16 @@ def register_filetype(
     transaction_service: TransactionService = Depends(get_transaction_service),
     user: dict = Depends(get_require_admin),
 ):
+    """Register a new input CSV schema mapping for transformation.
+
+    ## Parameters
+    - **payload** (`FileTypeAppendRequest`): File type mapping definition.
+    - **transaction_service** (`TransactionService`): File type registration service.
+    - **user** (`dict`): Authenticated admin payload.
+
+    ## Returns
+    - **Response**: Success message with HTTP 200.
+    """
     transaction_service.add_filetype_to_database(**payload.model_dump())
     return Response(status_code=200, content="File type registered successfully")
 
@@ -137,6 +180,16 @@ def delete_filetype(
     transaction_service: TransactionService = Depends(get_transaction_service),
     user: dict = Depends(get_require_admin),
 ):
+    """Soft-delete a registered file type by file name.
+
+    ## Parameters
+    - **payload** (`FileTypeDeleteRequest`): File type delete request.
+    - **transaction_service** (`TransactionService`): File type deletion service.
+    - **user** (`dict`): Authenticated admin payload.
+
+    ## Returns
+    - **Response**: Success message with deleted file name.
+    """
     transaction_service.delete_filetype_from_database(payload.file_name)
     return Response(
         status_code=200, content=f"File type deleted successfully {payload.file_name}"

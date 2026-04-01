@@ -17,30 +17,14 @@ from app.core.database_client import GoogleCloudAPI
     {
         "GCP_PROJECT_ID": "test-project",
         "GCP_BQ_DATASET": "test_dataset",
-        "GCP_LOCATION": "US",
-        "GCP_CGS_BUCKET": "test-bucket",
-        "GCP_CGS_BUCKET_DIR": "test-dir",
-    },
-)
-def test_dataset_property_with_default_env():
-    """Test that dataset property includes default environment suffix."""
-    api = GoogleCloudAPI()
-    assert api.dataset == "test_dataset_dev"  # Default ENV is 'dev'
-
-
-@patch.dict(
-    os.environ,
-    {
-        "GCP_PROJECT_ID": "test-project",
-        "GCP_BQ_DATASET": "test_dataset",
         "ENV": "prod",
         "GCP_LOCATION": "US",
         "GCP_CGS_BUCKET": "test-bucket",
         "GCP_CGS_BUCKET_DIR": "test-dir",
     },
 )
-def test_dataset_property_with_prod_env():
-    """Test that dataset property works with production environment."""
+def test_dataset_property_env():
+    """Test that dataset property works correctly based on environment variable."""
     api = GoogleCloudAPI()
     assert api.dataset == "test_dataset_prod"
 

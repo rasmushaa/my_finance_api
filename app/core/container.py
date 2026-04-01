@@ -1,6 +1,7 @@
 from typing import Any, Callable, Protocol
 
 from app.core.database_client import GoogleCloudAPI
+from app.core.settings import BigQueryConfig, GoogleOAuthConfig, JWTConfig
 from app.services.assets import AssetService
 from app.services.google_oauth import GoogleOAuthService
 from app.services.jwt import AppJwtService
@@ -103,8 +104,21 @@ def create_service_provider(service_class, **dependencies):
 def setup_container():
     """Set up the dependency injection container with all services and clients."""
 
+    # Typed settings
+    container.register("gcp_config", lambda: BigQueryConfig.from_env(), singleton=True)
+    container.register("jwt_config", lambda: JWTConfig.from_env(), singleton=True)
+    container.register(
+        "google_oauth_config",
+        lambda: GoogleOAuthConfig.from_env(),
+        singleton=True,
+    )
+
     # Cloud clients - register as singletons
-    container.register("cloud_client", lambda: GoogleCloudAPI(), singleton=True)
+    container.register(
+        "cloud_client",
+        create_service_provider(GoogleCloudAPI, config="gcp_config"),
+        singleton=True,
+    )
 
     # Database services
     container.register(
@@ -115,14 +129,21 @@ def setup_container():
     # JWT service - singleton
     container.register(
         "jwt_service",
-        create_service_provider(AppJwtService, user_client="users_service"),
+        create_service_provider(
+            AppJwtService,
+            user_client="users_service",
+            config="jwt_config",
+        ),
         singleton=True,
     )
 
     # OAuth services - singleton
     container.register(
         "google_oauth_service",
-        lambda: GoogleOAuthService(),
+        create_service_provider(
+            GoogleOAuthService,
+            config="google_oauth_config",
+        ),
         singleton=True,
     )
 

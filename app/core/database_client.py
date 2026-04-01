@@ -1,6 +1,5 @@
 import hashlib
 import logging
-import os
 
 import pandas as pd
 import pandas_gbq
@@ -9,6 +8,7 @@ from google.cloud import bigquery
 from google.cloud.exceptions import Forbidden, NotFound
 
 from app.core.errors.infra import DatabaseInternalError
+from app.core.settings import BigQueryConfig
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +27,11 @@ class GoogleCloudAPI:
     and is used to separate datasets for different environments.
     """
 
-    def __init__(self):
-        self.__project_id = os.getenv("GCP_PROJECT_ID")
-        self.__dataset = os.getenv("GCP_BQ_DATASET") + "_" + os.getenv("ENV", "dev")
-        self.__location = os.getenv("GCP_LOCATION")
+    def __init__(self, config: BigQueryConfig | None = None):
+        gcp_config = config or BigQueryConfig.from_env()
+        self.__project_id = gcp_config.project_id
+        self.__dataset = gcp_config.dataset
+        self.__location = gcp_config.location
 
     @property
     def dataset(self) -> str:

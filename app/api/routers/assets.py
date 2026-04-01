@@ -22,5 +22,15 @@ def upload_asset(
     asset_service: AssetService = Depends(get_asset_service),
     user: dict = Depends(get_require_user),
 ):
+    """Upload a user asset snapshot for a reporting date.
+
+    ## Parameters
+    - **payload** (`AssetUploadRequest`): Asset values and reporting date.
+    - **asset_service** (`AssetService`): Service for persisting asset rows.
+    - **user** (`dict`): Authenticated user payload.
+
+    ## Returns
+    - **Response**: Success message with HTTP 200.
+    """
     asset_service.upload_assets(**payload.model_dump(), user_email=user["sub"])
     return Response(status_code=200, content="Asset uploaded successfully")

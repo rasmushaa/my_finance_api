@@ -29,6 +29,16 @@ def predict(
     payload: dict = Depends(get_require_admin),
     store: ModelService = Depends(get_model_store),
 ):
+    """Run model inference for a batch of transactions.
+
+    ## Parameters
+    - **request** (`PredictRequest`): Input features for model prediction.
+    - **payload** (`dict`): Authenticated admin payload.
+    - **store** (`ModelService`): Model service used for inference.
+
+    ## Returns
+    - **PredictResponse**: Predicted category labels.
+    """
     df = request.to_dataframe()
     preds = store.predict(df)
     return PredictResponse(predictions=preds)
@@ -48,4 +58,13 @@ def get_model_metadata(
     payload: dict = Depends(get_require_admin),
     store: ModelService = Depends(get_model_store),
 ):
+    """Return metadata for the currently loaded ML model.
+
+    ## Parameters
+    - **payload** (`dict`): Authenticated admin payload.
+    - **store** (`ModelService`): Model service providing metadata.
+
+    ## Returns
+    - **ModelMetadataResponse**: Model versioning and provenance metadata.
+    """
     return ModelMetadataResponse(**store.metadata)

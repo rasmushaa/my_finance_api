@@ -3,31 +3,51 @@ name: domain
 description: >
   Domain knowledge for the my_finance_api project. Load this skill when adding
   features, writing tests, or making architectural decisions. Covers service
-  patterns, dependency injection, schemas, and coding conventions for this repo.
+  patterns, dependency injection, schemas, documentation style, and testing conventions.
 ---
 
 # MyFinance API — Domain Reference
 
-## Key Files to Read Before Making Changes
+## Read First
 
-Always read these files **before** adding, modifying, or reviewing code:
+Always scan these files before making non-trivial changes:
 
 | Purpose | File |
-|---------|------|
-| The actula bigquery schemas | `scripts/init_gbq_tables.py` |
-| DI container & service wiring | `app/core/container.py` |
-| Auth schemas & JWT logic | `app/schemas/auth.py`, `app/services/jwt.py` |
-| Exception hierarchy | `app/core/exceptions/base.py` |
-| Router registration | `app/main.py`, `app/api/routers/__init__.py` |
+|---|---|
+| BigQuery table schema source-of-truth | `config/bigquery_tables.yaml` |
+| Table initialization from schema config | `scripts/init_gbq_tables.py` |
+| Schema loader used by scripts/tests | `scripts/bigquery_table_config.py` |
+| DI container and service wiring | `app/core/container.py` |
+| Typed runtime settings | `app/core/settings.py` |
+| Error base class and global handlers | `app/core/errors/base_error.py`, `app/core/errors/handlers.py` |
+| API router registration | `app/main.py`, `app/api/v1.py` |
 
 ## Architecture Facts
 
-- **Dependency injection**: all services are resolved through `Container`. Never instantiate services directly; register them as singletons via `container.register(...)`.
-- **Schemas live in `app/schemas/`**: one file per domain area (`model.py`, `auth.py`, `io.py`, …). Add new Pydantic models there, not inside routers or services.
-- **Exceptions**: raise only subclasses of `AppError` (from `app/core/exceptions/base.py`). The global `app_error_handler` converts them to HTTP responses automatically.
-- **ML canonical features**: `date`, `receiver`, `amount` (defined in `app/schemas/model.py`). Any change to these must be reflected in `model_artifacts/` and tests.
+- Services are resolved through `Container` in `app/core/container.py`.
+- Pydantic request/response models belong in `app/schemas/`, not router/service files.
+- Raise `AppError` subclasses for expected failures; rely on global error handlers.
+- Canonical model features are in `app/schemas/model.py`. If changed, update model artifacts and tests.
+- BigQuery schema names are case-sensitive and follow current table contracts (e.g. `UserEmail`, `UserRole`).
 
-## Behavioral Guidelines
+## Documentation Conventions
 
-- Follow existing patterns exactly — match function signatures, docstring style, and import order found in neighbouring files.
-- When writing tests, mirror the structure of existing test files (e.g. `tests/test_api_auth.py`): use `pytest`, mock via DI container overrides
+- Python docstrings: NumPy style.
+- API endpoint docstrings: Markdown sections (`## Parameters`, `## Returns`, `## Raises`) for Swagger readability.
+- Keep README and workflow comments aligned with real commands and branch behavior.
+
+## Testing Conventions
+
+- Prefer `DuckDBMockClient` (`tests/helpers/duckdb_mock_client.py`) over ad hoc DB mocks.
+- Seeded test tables must match `config/bigquery_tables.yaml` columns exactly.
+- Unit/API tests should keep auth/service overrides focused and minimal.
+- Default local/CI test command: `pytest -m "not integration"`.
+
+## Change Checklist
+
+When touching schema, auth, or API contracts:
+
+1. Update schema/config or Pydantic models first.
+2. Update service logic and error handling.
+3. Update unit tests and API tests.
+4. Update README and workflow comments if behavior/commands changed.

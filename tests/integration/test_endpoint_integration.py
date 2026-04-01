@@ -22,22 +22,29 @@ from app.main import app
 
 logger = logging.getLogger(__name__)
 
-# Container needs JWT, which needs environment variables
-os.environ["APP_JWT_SECRET"] = "test-secret-key-for-jwt-testing"
-os.environ["APP_JWT_EXP_DELTA_MINUTES"] = "60"
-
-subprocess.run(
-    ["uv", "run", "python", "scripts/create_local_dev_tokens.py"], check=True
-)  # Refresh local dev tokens
-
-dotenv.load_dotenv()
-
-API_BASE_URL = "https://localhost:8081/"
+API_BASE_URL = ""
 MOCK_FILE_NAME = "local-integrtion-mock-data"
 
 
+@pytest.fixture(scope="module")
+def integration_env():
+    """Prepare integration credentials lazily when integration tests actually run."""
+    subprocess.run(
+        ["uv", "run", "python", "scripts/create_local_dev_tokens.py"],
+        check=True,
+    )  # Refresh local dev tokens
+    dotenv.load_dotenv(override=True)
+
+    required = ["LOCAL_DEV_ADMIN_TOKEN", "LOCAL_DEV_USER_TOKEN"]
+    missing = [key for key in required if not os.getenv(key)]
+    if missing:
+        pytest.fail(
+            f"Missing required integration environment variables: {', '.join(missing)}"
+        )
+
+
 @pytest.mark.integration
-def test_asset_integration():
+def test_asset_integration(integration_env):
 
     with TestClient(app) as client:
 
@@ -64,7 +71,7 @@ def test_asset_integration():
 
 
 @pytest.mark.integration
-def test_transaction_integration():
+def test_transaction_integration(integration_env):
 
     df_mock = pd.DataFrame(
         {

@@ -1,52 +1,67 @@
+"""Initialize BigQuery datasets and tables from YAML schema configuration.
+
+Usage
+-----
+Run from project root:
+
+```
+uv run python scripts/init_gbq_tables.py <dev|stg|prod>
+```
+"""
+
 import os
 import sys
 
+from bigquery_table_config import SCHEMA_CONFIG_PATH, load_bigquery_table_definitions
 from dotenv import load_dotenv
 from google.cloud import bigquery
 from google.cloud.exceptions import Conflict
 
-# How to run: uv run python scripts/init_gbq_tables.py <name of the environment, dev, stg, prod, etc.>
 
+def __build_schema_fields(
+    column_specs: list[dict[str, str]]
+) -> list[bigquery.SchemaField]:
+    """Build BigQuery schema fields from column specs.
 
-BASIC_META_COLS = [
-    bigquery.SchemaField(
-        "_RowStatus",
-        "STRING",
-        mode="REQUIRED",
-        description="Status of the row (i=inserted, u=updated, d=deleted)",
-    ),
-    bigquery.SchemaField(
-        "_RowCreatedAt",
-        "TIMESTAMP",
-        mode="REQUIRED",
-        description="Timestamp when the row was first created",
-    ),
-    bigquery.SchemaField(
-        "_RowUpdatedAt",
-        "TIMESTAMP",
-        mode="NULLABLE",
-        description="Timestamp when the row was last updated",
-    ),
-    bigquery.SchemaField(
-        "_RowUploadHash",
-        "STRING",
-        mode="NULLABLE",
-        description="Original hash of the row data (including the metadata cols) for traceability and auditing purposes",
-    ),
-]
-TRANSACTIONS_META_COLS = [
-    bigquery.SchemaField(
-        "_RowProcessingID",
-        "STRING",
-        mode="NULLABLE",
-        description="Unique ID (input features and timestamp) to link the original input row to the model predictions for monitoring and auditing purposes",
-    ),
-]
+    Parameters
+    ----------
+    column_specs : list[dict[str, str]]
+        Ordered list of column definitions from YAML.
+
+    Returns
+    -------
+    list[bigquery.SchemaField]
+        SchemaField list passed to BigQuery table creation.
+    """
+    schema_fields: list[bigquery.SchemaField] = []
+    for col in column_specs:
+        schema_fields.append(
+            bigquery.SchemaField(
+                col["name"],
+                col["type"],
+                mode=col.get("mode", "NULLABLE"),
+                description=col.get("description"),
+            )
+        )
+    return schema_fields
 
 
 def __create_table(
     dataset: bigquery.Table, table_name: str, schema: list, client: bigquery.Client
 ) -> None:
+    """Create a table and ignore already-existing table conflicts.
+
+    Parameters
+    ----------
+    dataset : bigquery.Table
+        Destination dataset reference.
+    table_name : str
+        Table name to create inside the dataset.
+    schema : list
+        BigQuery schema field list.
+    client : bigquery.Client
+        BigQuery client used for table creation.
+    """
     table = dataset.table(table_name)
     table = bigquery.Table(table, schema=schema)
     try:
@@ -60,10 +75,11 @@ def __create_table(
 
 
 def main():
+    """Entrypoint for dataset and table initialization."""
 
     # 1. Verify User Inputs Env: Dev, Stg, Prod
     if len(sys.argv) != 2 or sys.argv[1] not in ["dev", "stg", "prod"]:
-        print("Usage: python init_bigquery_databse.py <dev, stg, prod>")
+        print("Usage: python scripts/init_gbq_tables.py <dev, stg, prod>")
         sys.exit(1)
 
     print(f"\nConstructing BigQuery Database for {sys.argv[1]}-environment")
@@ -79,7 +95,7 @@ def main():
     location = os.getenv("GCP_LOCATION")
     dataset_id = os.getenv("GCP_BQ_DATASET") + "_" + sys.argv[1]
 
-    # 3. Initializea BigQuery client object for Creating Non-Existant Databasets/Tables
+    # 3. Initialize BigQuery client object for creating non-existing datasets/tables
     client = bigquery.Client()
 
     # 4. Construct a Dataset object to send to the API.
@@ -93,164 +109,14 @@ def main():
             f"Warning: there already exists a '{dataset_id}' dataset in the '{project_id}' project\nProceeding to create tables in the existing dataset..."
         )
 
-    # 5. Create Credentials table
-    schema = [
-        bigquery.SchemaField(
-            "UserEmail",
-            "STRING",
-            mode="REQUIRED",
-            description="Google account (OAuth2) email of the user",
-        ),
-        bigquery.SchemaField(
-            "UserRole",
-            "STRING",
-            mode="REQUIRED",
-            description="Role of the user within the application (admin, user)",
-        ),
-    ] + BASIC_META_COLS
-    __create_table(dataset, "d_credentials", schema, client)
-
-    # 6. Create Known Filetypes table
-    schema = [
-        bigquery.SchemaField(
-            "FileID",
-            "STRING",
-            mode="REQUIRED",
-            description="Unique id of the file type, generated as a hash of the column names. Used to match incoming files to their corresponding schema for transformation.",
-        ),
-        bigquery.SchemaField(
-            "FileName", "STRING", mode="REQUIRED", description="Name of the file type"
-        ),
-        bigquery.SchemaField(
-            "DateColumn",
-            "STRING",
-            mode="REQUIRED",
-            description="Name of the column containing the date",
-        ),
-        bigquery.SchemaField(
-            "DateColumnFormat",
-            "STRING",
-            mode="REQUIRED",
-            description="Format of the date column, i.e. how to parse the date values, e.g. %Y-%m-%d",
-        ),
-        bigquery.SchemaField(
-            "AmountColumn",
-            "STRING",
-            mode="REQUIRED",
-            description="Name of the column containing the amount",
-        ),
-        bigquery.SchemaField(
-            "ReceiverColumn",
-            "STRING",
-            mode="REQUIRED",
-            description="Name of the column containing the receiver",
-        ),
-    ] + BASIC_META_COLS
-    __create_table(dataset, "d_filetypes", schema, client)
-
-    # 7. Create the Main Transactions table
-    schema = (
-        [
-            bigquery.SchemaField(
-                "UserEmail",
-                "STRING",
-                mode="REQUIRED",
-                description="Google account (OAuth2) email of the user",
-            ),
-            bigquery.SchemaField(
-                "Date", "DATE", mode="REQUIRED", description="Date of the transaction"
-            ),
-            bigquery.SchemaField(
-                "Amount",
-                "FLOAT",
-                mode="REQUIRED",
-                description="Amount of the transaction",
-            ),
-            bigquery.SchemaField(
-                "Receiver",
-                "STRING",
-                mode="REQUIRED",
-                description="Receiver of the transaction",
-            ),
-            bigquery.SchemaField(
-                "Category",
-                "STRING",
-                mode="REQUIRED",
-                description="Category of the transaction",
-            ),
-        ]
-        + TRANSACTIONS_META_COLS
-        + BASIC_META_COLS
+    table_definitions = load_bigquery_table_definitions()
+    print(
+        f"Loaded {len(table_definitions)} table definitions from {SCHEMA_CONFIG_PATH}"
     )
-    __create_table(dataset, "f_transactions", schema, client)
 
-    # 8. Create the Main Assets table
-    schema = [
-        bigquery.SchemaField(
-            "UserEmail",
-            "STRING",
-            mode="REQUIRED",
-            description="Google account (OAuth2) email of the user",
-        ),
-        bigquery.SchemaField(
-            "Date",
-            "DATE",
-            mode="REQUIRED",
-            description="Reporting date of the asset record",
-        ),
-        bigquery.SchemaField(
-            "Category", "STRING", mode="REQUIRED", description="Category of the asset"
-        ),
-        bigquery.SchemaField(
-            "Value", "FLOAT", mode="REQUIRED", description="Value of the asset"
-        ),
-    ] + BASIC_META_COLS
-    __create_table(dataset, "f_assets", schema, client)
-
-    # 9. Create the Predictions monitoring table
-    schema = (
-        [
-            bigquery.SchemaField(
-                "PredictedCategory",
-                "STRING",
-                mode="REQUIRED",
-                description="Predicted category of the transaction",
-            ),
-            bigquery.SchemaField(
-                "ModelName",
-                "STRING",
-                mode="REQUIRED",
-                description="Name of the model used for prediction",
-            ),
-            bigquery.SchemaField(
-                "ModelAlias",
-                "STRING",
-                mode="REQUIRED",
-                description="Alias of the model used for prediction",
-            ),
-            bigquery.SchemaField(
-                "ModelVersion",
-                "STRING",
-                mode="REQUIRED",
-                description="Version of the model used for prediction",
-            ),
-            bigquery.SchemaField(
-                "ModelCommitSHA",
-                "STRING",
-                mode="REQUIRED",
-                description="Commit SHA of the model used for prediction",
-            ),
-            bigquery.SchemaField(
-                "ModelArchitecture",
-                "STRING",
-                mode="REQUIRED",
-                description="Architecture of the model used for prediction",
-            ),
-        ]
-        + TRANSACTIONS_META_COLS
-        + BASIC_META_COLS
-    )
-    __create_table(dataset, "f_predictions", schema, client)
+    for table_name, column_specs in table_definitions.items():
+        schema = __build_schema_fields(column_specs)
+        __create_table(dataset, table_name, schema, client)
 
 
 if __name__ == "__main__":

@@ -114,12 +114,12 @@ class UsersService:
         # Client handles errors
         sql = f"""
         SELECT
-            UserName as email,
-            Role as role
+            UserEmail as email,
+            UserRole as role
         FROM
             {self.db_client.dataset}.d_credentials
         WHERE
-            UserName = '{sanitized_email}'
+            UserEmail = '{sanitized_email}'
             AND _RowStatus != 'd'
         """  # nosec B608
         df = self.db_client.sql_to_pandas(sql)

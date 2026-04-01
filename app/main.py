@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
@@ -11,41 +12,44 @@ from app.core.errors.base_error import AppError
 from app.core.errors.handlers import app_error_handler
 from app.core.setup_logging import setup_logging
 
-setup_logging(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# -- Lifespan ---------------------------------------------
-def lifespan(app: FastAPI):
-    logger.info("Starting up application...")
+def create_app() -> FastAPI:
+    """Application factory to build FastAPI app with lifecycle hooks."""
+    setup_logging(level=logging.INFO)
 
-    # Get services that need startup tasks from container
-    startup_services = get_services_requiring_startup()
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        logger.info("Starting up application...")
 
-    # Run startup tasks
-    # Note: this used to be async thredads, but Cloud Run (with request based billing) does not process background threads.
-    # The Cloud Run has 4min maximum startup time, so all startup tasks must be completed within that time frame.
-    for service in startup_services:
-        if hasattr(service, "load"):  # Protocol check for load method
-            logger.info(f"Loading {service.__class__.__name__}")
-            service.load()
+        # Get services that need startup tasks from container
+        startup_services = get_services_requiring_startup()
 
-    yield
+        # Run startup tasks
+        # Note: this used to be async thredads, but Cloud Run (with request based billing) does not process background threads.
+        # The Cloud Run has 4min maximum startup time, so all startup tasks must be completed within that time frame.
+        for service in startup_services:
+            if hasattr(service, "load"):  # Protocol check for load method
+                logger.info(f"Loading {service.__class__.__name__}")
+                service.load()
 
-    # Cleanup on shutdown
-    logger.info("Shutting down application...")
-    shutdown_services = get_services_requiring_shutdown()
-    for shutdown_service in shutdown_services:
-        if hasattr(shutdown_service, "cleanup"):
-            logger.info(f"Cleaning up {shutdown_service.__class__.__name__}")
-            shutdown_service.cleanup()
+        try:
+            yield
+        finally:
+            # Cleanup on shutdown
+            logger.info("Shutting down application...")
+            shutdown_services = get_services_requiring_shutdown()
+            for shutdown_service in shutdown_services:
+                if hasattr(shutdown_service, "cleanup"):
+                    logger.info(f"Cleaning up {shutdown_service.__class__.__name__}")
+                    shutdown_service.cleanup()
+
+    application = FastAPI(title="MyFinance ML API", lifespan=lifespan)
+    application.include_router(v1_router)
+    application.add_exception_handler(AppError, app_error_handler)
+    return application
 
 
 # -- Application ---------------------------------------------
-app = FastAPI(title="MyFinance ML API", lifespan=lifespan)
-
-# Include all routers from the API router module
-app.include_router(v1_router)
-
-# The main error handler
-app.add_exception_handler(AppError, app_error_handler)
+app = create_app()
