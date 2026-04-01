@@ -1,7 +1,6 @@
 """Google OAuth service for handling authentication dependencies."""
 
 import logging
-import os
 from typing import Any, Dict
 
 import requests
@@ -14,6 +13,7 @@ from app.core.errors.auth import (
     MissingEmailError,
     MissingIdTokenError,
 )
+from app.core.settings import GoogleOAuthConfig
 
 logger = logging.getLogger(__name__)
 
@@ -21,25 +21,13 @@ logger = logging.getLogger(__name__)
 class GoogleOAuthService:
     """Service for handling Google OAuth operations."""
 
-    def __init__(self):
+    def __init__(self, config: GoogleOAuthConfig | None = None):
         """Initialize Google OAuth service."""
 
-        # OAuth configuration from environment variables or parameters
-        self.client_id = os.environ["GOOGLE_OAUTH_CLIENT_ID"]
-        self.client_secret = os.environ["GOOGLE_OAUTH_CLIENT_SECRET"]
-        self.token_uri = os.environ.get(
-            "GOOGLE_OAUTH_TOKEN_URI", "https://oauth2.googleapis.com/token"
-        )
-
-        if not self.client_id or not self.client_secret:
-            raise ValueError(
-                "Google OAuth client ID must be provided via environment variables or parameters"
-            )
-
-        if not self.client_secret:
-            raise ValueError(
-                "Google OAuth client secret must be provided via environment variables or parameters"
-            )
+        oauth_config = config or GoogleOAuthConfig.from_env()
+        self.client_id = oauth_config.client_id
+        self.client_secret = oauth_config.client_secret
+        self.token_uri = oauth_config.token_uri
 
     def exchange_code_for_id_token(
         self, code: str, redirect_uri: str

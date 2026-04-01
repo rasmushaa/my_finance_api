@@ -1,7 +1,5 @@
 import logging
-import os
 import time
-from dataclasses import dataclass
 from typing import Protocol
 
 from jose import jwt
@@ -11,6 +9,7 @@ from app.core.errors.auth import (
     InvalidIdTokenError,
     UserNotFoundError,
 )
+from app.core.settings import JWTConfig
 
 logger = logging.getLogger(__name__)
 
@@ -24,45 +23,23 @@ class UserClientProtocol(Protocol):
         ...
 
 
-@dataclass(frozen=True)
-class JWTConfig:
-    """Readonly configuration for JWT operations."""
-
-    algorithm: str = "HS256"
-
-    @property
-    def secret(self) -> str:
-        """Get JWT secret from environment variable."""
-        return os.environ["APP_JWT_SECRET"]
-
-    @property
-    def token_expire_minutes(self) -> int:
-        """Get JWT expiration time from environment variable.
-
-        Details
-        -------
-        Using the key method mandates to have placed the variable at runtime,
-        which does not allow to run profcution with default values.
-        However, this requieres to inlclude the variables in every test module,
-        which may not even use the JWT service directly,
-        but only through the security dependencies.
-        """
-        return int(os.environ["APP_JWT_EXP_DELTA_MINUTES"])
-
-
 class AppJwtService:
-    def __init__(self, user_client: UserClientProtocol):
+    def __init__(
+        self,
+        user_client: UserClientProtocol,
+        config: JWTConfig | None = None,
+    ):
         """Initialize the JWT service.
 
         Attributes
         ----------
         user_client : UserClientProtocol
             A client that implements the UserClientProtocol for fetching user data.
-        __config : JWTConfig
+        config : JWTConfig | None
             The configuration object containing JWT settings.
         """
         self.user_client = user_client
-        self.__config = JWTConfig()
+        self.__config = config or JWTConfig.from_env()
 
     @property
     def config(self) -> JWTConfig:
