@@ -1,14 +1,9 @@
 """Test JWT service functionality and security features."""
 
-import os
 import time
 
 import pytest
 from jose import jwt
-
-# Set test environment variables BEFORE importing JWT service
-os.environ["APP_JWT_SECRET"] = "test-secret-key-for-jwt-testing"
-os.environ["APP_JWT_EXP_DELTA_MINUTES"] = "60"
 
 # Test constants matching the environment variables above
 JWT_TEST_SECRET = "test-secret-key-for-jwt-testing"

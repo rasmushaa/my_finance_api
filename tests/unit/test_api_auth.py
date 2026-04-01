@@ -1,70 +1,28 @@
 """Test auth endpoint functionality and email-based rate limiting."""
 
-import os
-
-import pytest
 from fastapi.testclient import TestClient
 
 from app.api.dependencys import get_google_oauth_service, get_jwt_service
-from app.core.errors.auth import CodeExchangeError
+from app.core.errors.auth import UserNotFoundError
 from app.core.errors.base_error import ErrorCode
 from app.main import app
-
-# Container needs JWT, which needs environment variables
-os.environ["APP_JWT_SECRET"] = "test-secret-key-for-jwt-testing"
-os.environ["APP_JWT_EXP_DELTA_MINUTES"] = "60"
-
-
-# --------------- Mock Services for Testing ----------------
-class MockGoogleOAuthService:
-    """Mock Google OAuth service that returns predefined user info."""
-
-    def __init__(self, user_info=None, should_fail=False):
-        self.user_info = user_info or {
-            "email": "user@example.com",
-            "name": "Test User",
-            "picture": "https://example.com/photo.jpg",
-        }
-        self.should_fail = should_fail
-
-    def exchange_code_for_id_token(self, code: str, redirect_uri: str) -> dict:
-        if self.should_fail:
-            raise CodeExchangeError()
-        return self.user_info
-
-
-class MockJwtService:
-    """Mock JWT service that returns a predefined token."""
-
-    def authenticate(self, email: str) -> str:
-        return "mock-jwt-token-for-testing"
+from tests.helpers.fake_services import FakeGoogleOAuthService, FakeJwtService
 
 
 # ------------------ Mock Dependency Overrides ------------------
 def override_google_oauth_service():
-    return MockGoogleOAuthService()
+    return FakeGoogleOAuthService()
 
 
 def override_google_oauth_service_failing():
-    return MockGoogleOAuthService(should_fail=True)
+    return FakeGoogleOAuthService(should_fail=True)
 
 
 def override_jwt_service():
-    return MockJwtService()
+    return FakeJwtService()
 
 
 VALID_AUTH_PAYLOAD = {"code": "mock-google-code", "redirect_uri": "http://localhost"}
-
-
-@pytest.fixture(autouse=True)
-def cleanup_overrides():
-    """Ensure clean dependency state and reset rate limiter for each test."""
-    yield
-    app.dependency_overrides.clear()
-    # Reset the module-level rate limiter between tests
-    from app.api.routers.auth import _auth_limiter
-
-    _auth_limiter._requests.clear()
 
 
 # -------------------------- Tests --------------------------
@@ -98,6 +56,31 @@ def test_auth_google_code_exchange_failure_returns_401():
     assert response.json()["code"] == ErrorCode.INVALID_TOKEN
 
 
+def test_auth_google_code_user_not_found_returns_404():
+    """If JWT auth cannot map email to a user, endpoint should return 404."""
+    app.dependency_overrides[get_google_oauth_service] = override_google_oauth_service
+    app.dependency_overrides[get_jwt_service] = lambda: FakeJwtService(
+        error=UserNotFoundError()
+    )
+
+    client = TestClient(app)
+    response = client.post("/app/v1/auth/google/code", json=VALID_AUTH_PAYLOAD)
+
+    assert response.status_code == 404
+    assert response.json()["code"] == ErrorCode.UNAUTHORIZED.value
+
+
+def test_auth_google_code_invalid_payload_returns_422():
+    """Pydantic request validation should reject missing redirect_uri."""
+    app.dependency_overrides[get_google_oauth_service] = override_google_oauth_service
+    app.dependency_overrides[get_jwt_service] = override_jwt_service
+
+    client = TestClient(app)
+    response = client.post("/app/v1/auth/google/code", json={"code": "only-code"})
+
+    assert response.status_code == 422
+
+
 def test_auth_rate_limit_blocks_after_exceeded():
     """Test that the 6th request from the same email gets rate limited (429)."""
     app.dependency_overrides[get_google_oauth_service] = override_google_oauth_service
@@ -119,6 +102,21 @@ def test_auth_rate_limit_blocks_after_exceeded():
     assert "cooldown_seconds" in data["details"]
 
 
+def test_auth_rate_limit_blocks_before_jwt_authentication():
+    """The rate-limited request should not call JWT minting."""
+    jwt_service = FakeJwtService()
+    app.dependency_overrides[get_google_oauth_service] = override_google_oauth_service
+    app.dependency_overrides[get_jwt_service] = lambda: jwt_service
+
+    client = TestClient(app)
+    first = client.post("/app/v1/auth/google/code", json=VALID_AUTH_PAYLOAD)
+    second = client.post("/app/v1/auth/google/code", json=VALID_AUTH_PAYLOAD)
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert len(jwt_service.calls) == 1
+
+
 def test_auth_rate_limit_is_per_email():
     """Test that rate limiting is scoped per email, not global."""
     user_a_info = {
@@ -136,7 +134,7 @@ def test_auth_rate_limit_is_per_email():
     client = TestClient(app)
 
     # Exhaust rate limit for user A
-    app.dependency_overrides[get_google_oauth_service] = lambda: MockGoogleOAuthService(
+    app.dependency_overrides[get_google_oauth_service] = lambda: FakeGoogleOAuthService(
         user_info=user_a_info
     )
     for i in range(1):
@@ -150,7 +148,7 @@ def test_auth_rate_limit_is_per_email():
     ), "User A should be rate limited after exceeding limit"
 
     # User B should still be allowed (different email key)
-    app.dependency_overrides[get_google_oauth_service] = lambda: MockGoogleOAuthService(
+    app.dependency_overrides[get_google_oauth_service] = lambda: FakeGoogleOAuthService(
         user_info=user_b_info
     )
     response = client.post("/app/v1/auth/google/code", json=VALID_AUTH_PAYLOAD)
