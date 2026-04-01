@@ -110,30 +110,7 @@ def main():
     ] + BASIC_META_COLS
     __create_table(dataset, "d_credentials", schema, client)
 
-    # 6. Create Category Names table for all categories
-    schema = [
-        bigquery.SchemaField(
-            "CategoryGroup",
-            "STRING",
-            mode="REQUIRED",
-            description="Name of the top level grouping of categories, e.g. transactons, assets, etc.",
-        ),
-        bigquery.SchemaField(
-            "CategoryName",
-            "STRING",
-            mode="REQUIRED",
-            description="Reporting level name of the category, e.g. groceries, salary, rent, etc.",
-        ),
-        bigquery.SchemaField(
-            "CategoryComment",
-            "STRING",
-            mode="REQUIRED",
-            description="Comment or additional information about the category content.",
-        ),
-    ] + BASIC_META_COLS
-    __create_table(dataset, "d_category", schema, client)
-
-    # 7. Create Known Filetypes table
+    # 6. Create Known Filetypes table
     schema = [
         bigquery.SchemaField(
             "FileID",
@@ -171,7 +148,7 @@ def main():
     ] + BASIC_META_COLS
     __create_table(dataset, "d_filetypes", schema, client)
 
-    # 8. Create the Main Transactions table
+    # 7. Create the Main Transactions table
     schema = (
         [
             bigquery.SchemaField(
@@ -207,7 +184,7 @@ def main():
     )
     __create_table(dataset, "f_transactions", schema, client)
 
-    # 9. Create the Main Assets table
+    # 8. Create the Main Assets table
     schema = [
         bigquery.SchemaField(
             "UserEmail",
@@ -230,7 +207,7 @@ def main():
     ] + BASIC_META_COLS
     __create_table(dataset, "f_assets", schema, client)
 
-    # 10. Create the Predictions monitoring table
+    # 9. Create the Predictions monitoring table
     schema = (
         [
             bigquery.SchemaField(

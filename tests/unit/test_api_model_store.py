@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.dependencies.providers import get_model_store, get_require_admin
+from app.api.dependencys import get_model_store, get_require_admin
 from app.core.errors.base_error import ErrorCode
 from app.main import app
 
@@ -78,7 +78,7 @@ def test_predict_endpoint():
 
     client = TestClient(app)
     request_payload = {"inputs": {"a": [1.0, 3.0], "b": [2.0, 4.0]}}
-    response = client.post("/model/predict", json=request_payload)
+    response = client.post("/app/v1/model/predict", json=request_payload)
     assert response.status_code == 200
     assert response.json() == {"predictions": ["class_a", "class_a"]}
 
@@ -97,7 +97,7 @@ def test_predict_endpoint_missing_feature():
             # Missing feature 'b'
         }
     }
-    response = client.post("/model/predict", json=request_payload)
+    response = client.post("/app/v1/model/predict", json=request_payload)
     assert response.status_code == 400
     assert response.json()["code"] == ErrorCode.INVALID_INPUT
 
@@ -117,7 +117,7 @@ def test_predict_endpoint_extra_feature():
             "c": [5.0, 6.0],  # Extra feature 'c'
         }
     }
-    response = client.post("/model/predict", json=request_payload)
+    response = client.post("/app/v1/model/predict", json=request_payload)
     print(response.json())
     assert response.status_code == 400
     assert response.json()["code"] == ErrorCode.INVALID_INPUT
@@ -130,7 +130,7 @@ def test_model_info_endpoint():
     app.dependency_overrides[get_model_store] = override_store
 
     client = TestClient(app)
-    response = client.get("/model/metadata")
+    response = client.get("/app/v1/model/metadata")
     assert response.status_code == 200
     assert response.json()["version"] == 1
     assert response.json()["model_name"] == "test_model"
@@ -148,10 +148,10 @@ def test_model_endpoints_unauthorized():
 
     # Test predict endpoint
     request_payload = {"inputs": {"a": [1.0, 3.0], "b": [2.0, 4.0]}}
-    predict_response = client.post("/model/predict", json=request_payload)
+    predict_response = client.post("/app/v1/model/predict", json=request_payload)
 
     # Test metadata endpoint
-    metadata_response = client.get("/model/metadata")
+    metadata_response = client.get("/app/v1/model/metadata")
 
     # All endpoints should require authentication
     assert predict_response.status_code in [401, 422]

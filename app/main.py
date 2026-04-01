@@ -2,7 +2,7 @@ import logging
 
 from fastapi import FastAPI
 
-from app.api.routers import routers
+from app.api.v1 import router as v1_router
 from app.core.container import (
     get_services_requiring_shutdown,
     get_services_requiring_startup,
@@ -15,7 +15,7 @@ setup_logging(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------- Lifespan ---------------------------
+# -- Lifespan ---------------------------------------------
 def lifespan(app: FastAPI):
     logger.info("Starting up application...")
 
@@ -41,12 +41,11 @@ def lifespan(app: FastAPI):
             shutdown_service.cleanup()
 
 
-# ---------------------------- Application ---------------------------
+# -- Application ---------------------------------------------
 app = FastAPI(title="MyFinance ML API", lifespan=lifespan)
 
 # Include all routers from the API router module
-for router in routers:
-    app.include_router(router)
+app.include_router(v1_router)
 
 # The main error handler
 app.add_exception_handler(AppError, app_error_handler)

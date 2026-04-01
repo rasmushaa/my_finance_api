@@ -13,11 +13,31 @@ from app.services.model import ModelService
 logger = logging.getLogger(__name__)
 
 
-TRANSACTION_FEATURE_COLUMNS = ["Date", "Amount", "Receiver"]
-TRANSACTION_COLUMNS = TRANSACTION_FEATURE_COLUMNS + ["Category"]
+TRANSACTION_COLUMNS = [
+    "Date",
+    "Amount",
+    "Receiver",
+    "Category",
+]  # The cols matching the expected format in the database (not including metadata columns)
+
+TRANSACTION_LABELS = {  # The transaction labels and their descriptions, the repoting tooling uses these keys in grouping, do not change the keys without hesitation
+    "FOOD": "All noraml food and lunch expenses (inlcuding cat food, and all grocery bills despite of mixed items)",
+    "ENTERTAINMENT": "All expenses related to entertainment and leisure activities, such as movies, concerts, caffee, and restaurants",
+    "COMMUTING": "All expenses related to transportation and commuting, such as public transportation, fuel, parking, and tolls",
+    "OTHER-INCOME": "All income that does not fit into the SALARY category, such as gifts, refunds, and other miscellaneous income",
+    "TECHNOLOGY": "All expenses related to technology and electronics, such as computer and phone purchases, software subscriptions, and online services",
+    "HEALTH": "All expenses related to health and wellness, such as medical bills, cosmetics, and haircuts",
+    "LIVING": "All expenses related to living costs, such as rent, utilities, housing maintenance, and insurances",
+    "HOBBIES": "All expenses related to hobbies and personal interests, such as sports equipment, books, and games",
+    "HOUSEHOLD-ITEMS": "All expenses related to household items, such as furniture, appliances, and tools",
+    "CLOTHING": "All expenses related to clothing and footwear (if some online shpping items are returned, they may be canceled by deleting both the original and the refund transaction, but only of the amounts are exactly the same!)",
+    "UNCATEGORIZED": "All transactions that could not be categorized into the other categories, such as student loan payments, taxes, and other expenses that do not fit into the other categories",
+    "INVESTING": "All expenses related to investments and financial products, such as stock purchases, cryptocurrency transactions, and investment fund contributions",
+    "SALARY": "All income from salary, including benefits and refunds from work",
+}
 
 
-class IOService:
+class TransactionService:
 
     def __init__(self, db_client, model_service: ModelService):
         """Initialize the IO service to handle file operations.
@@ -29,6 +49,16 @@ class IOService:
         """
         self.db_client = db_client
         self.model_service = model_service
+
+    def get_transaction_labels(self) -> dict:
+        """Get the transaction labels and their descriptions.
+
+        Returns
+        -------
+        dict
+            A dictionary of transaction labels (keys) and their descriptions (values).
+        """
+        return TRANSACTION_LABELS
 
     def add_filetype_to_database(
         self,
@@ -91,7 +121,7 @@ class IOService:
                 },
             )
 
-    def append_transactions(self, input_file, user_email: str):
+    def upload_transactions(self, input_file, user_email: str):
         """Append the user input file to the transactions table in the database.
 
         All new rows are marked with _RowStatus 'i' for inserted, and the current
@@ -100,10 +130,10 @@ class IOService:
         encoding, separator = self.__autodetect_file_coding(input_file)
         df = pd.read_csv(input_file, encoding=encoding, sep=separator)
         df["UserEmail"] = user_email
-        other_cols = [c for c in df.columns if c != "UserEmail"]
-        df = df[["UserEmail"] + other_cols]  # Ensure UserEmail is the first column
+        df = df[
+            ["UserEmail", "Date", "Amount", "Receiver", "Category"]
+        ]  # Ensure UserEmail is the first column
         self.db_client.append_pandas_to_table(df, "f_transactions")
-        logger.info(f"Appended {len(df)} rows to f_transactions table in the database.")
 
     def transform_input_file(self, input_file) -> pd.DataFrame:
         """Opens unkown CSV safely.
@@ -297,5 +327,8 @@ class IOService:
 
         dialect = csv.Sniffer().sniff(raw.decode(encoding), delimiters=",; \t|")
         separator = dialect.delimiter
+        logger.info(
+            f"Auto-detected file encoding: {encoding}, separator: '{separator}'"
+        )
 
         return encoding, separator

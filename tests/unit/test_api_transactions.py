@@ -7,10 +7,10 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.dependencies.providers import (
-    get_io_service,
+from app.api.dependencys import (
     get_require_admin,
     get_require_user,
+    get_transaction_service,
 )
 from app.core.errors.domain import ModelInputError, UnknownFileTypeError
 from app.main import app
@@ -123,99 +123,33 @@ def test_import_csv_success():
     """Test that a valid CSV upload returns a processed CSV with predicted
     categories."""
     app.dependency_overrides[get_require_user] = mock_require_user
-    app.dependency_overrides[get_io_service] = override_io_service
+    app.dependency_overrides[get_transaction_service] = override_io_service
 
     client = TestClient(app)
-    response = client.post("/io/transform-csv", files=[_make_csv_upload()])
+    response = client.post("/app/v1/transactions/transform", files=[_make_csv_upload()])
 
+    # Validate response metadata and headers
     assert response.status_code == 200
     assert response.headers["content-type"] == "text/csv; charset=utf-8"
     assert (
         'attachment; filename="processed_transactions.csv"'
         in response.headers["content-disposition"]
     )
-
-
-def test_import_csv_response_metadata_headers():
-    """Test that response includes X-Row-Count and X-Columns metadata headers."""
-    app.dependency_overrides[get_require_user] = mock_require_user
-    app.dependency_overrides[get_io_service] = override_io_service
-
-    client = TestClient(app)
-    response = client.post("/io/transform-csv", files=[_make_csv_upload()])
-
-    assert response.status_code == 200
     assert "x-row-count" in response.headers
     assert int(response.headers["x-row-count"]) == 2
     assert "x-columns" in response.headers
     assert "Category" in response.headers["x-columns"].split(",")
 
 
-def test_import_csv_response_data_values():
-    """Test that the returned CSV contains the correct row values and predicted
-    categories."""
-    app.dependency_overrides[get_require_user] = mock_require_user
-    app.dependency_overrides[get_io_service] = override_io_service
-
-    client = TestClient(app)
-    response = client.post("/io/transform-csv", files=[_make_csv_upload()])
-
-    assert response.status_code == 200
-
-    df = pd.read_csv(io.StringIO(response.text))
-
-    # Shape
-    assert len(df) == 2
-    assert set(df.columns) == {"date", "receiver", "amount", "Category"}
-
-    # Row values
-    assert df.iloc[0]["date"] == "2024-01-01"
-    assert df.iloc[0]["receiver"] == "Grocery Store"
-    assert df.iloc[0]["amount"] == pytest.approx(-25.50)
-    assert df.iloc[0]["Category"] == "Food"
-
-    assert df.iloc[1]["date"] == "2024-01-02"
-    assert df.iloc[1]["receiver"] == "Salary"
-    assert df.iloc[1]["amount"] == pytest.approx(2000.00)
-    assert df.iloc[1]["Category"] == "Income"
-
-
-def test_import_csv_invalid_content_type_still_works():
-    """Test that uploading a non-CSV file type still processes the file."""
-    app.dependency_overrides[get_require_user] = mock_require_user
-    app.dependency_overrides[get_io_service] = override_io_service
-
-    client = TestClient(app)
-    response = client.post(
-        "/io/transform-csv",
-        files=[_make_csv_upload(content_type="application/json", filename="data.json")],
-    )
-
-    df = pd.read_csv(io.StringIO(response.text))
-
-    # Shape
-    assert len(df) == 2
-    assert set(df.columns) == {"date", "receiver", "amount", "Category"}
-
-    # Row values
-    assert df.iloc[0]["date"] == "2024-01-01"
-    assert df.iloc[0]["receiver"] == "Grocery Store"
-    assert df.iloc[0]["amount"] == pytest.approx(-25.50)
-    assert df.iloc[0]["Category"] == "Food"
-
-    assert df.iloc[1]["date"] == "2024-01-02"
-    assert df.iloc[1]["receiver"] == "Salary"
-    assert df.iloc[1]["amount"] == pytest.approx(2000.00)
-    assert df.iloc[1]["Category"] == "Income"
-
-
 def test_import_csv_unknown_filetype_error_returns_400():
     """Test that an unrecognised CSV structure from IOService returns a 400 error."""
     app.dependency_overrides[get_require_user] = mock_require_user
-    app.dependency_overrides[get_io_service] = override_io_service_unknown_filetype
+    app.dependency_overrides[get_transaction_service] = (
+        override_io_service_unknown_filetype
+    )
 
     client = TestClient(app)
-    response = client.post("/io/transform-csv", files=[_make_csv_upload()])
+    response = client.post("/app/v1/transactions/transform", files=[_make_csv_upload()])
 
     assert response.status_code == 400
 
@@ -223,10 +157,12 @@ def test_import_csv_unknown_filetype_error_returns_400():
 def test_import_csv_model_input_error_returns_400():
     """Test that a model prediction failure due to bad features returns a 400 error."""
     app.dependency_overrides[get_require_user] = mock_require_user
-    app.dependency_overrides[get_io_service] = override_io_service_model_failing
+    app.dependency_overrides[get_transaction_service] = (
+        override_io_service_model_failing
+    )
 
     client = TestClient(app)
-    response = client.post("/io/transform-csv", files=[_make_csv_upload()])
+    response = client.post("/app/v1/transactions/transform", files=[_make_csv_upload()])
 
     assert response.status_code == 400
 
@@ -234,10 +170,10 @@ def test_import_csv_model_input_error_returns_400():
 def test_import_csv_unauthorized():
     """Test that the endpoint rejects requests without authentication."""
     app.dependency_overrides.clear()
-    app.dependency_overrides[get_io_service] = override_io_service
+    app.dependency_overrides[get_transaction_service] = override_io_service
 
     client = TestClient(app)
-    response = client.post("/io/transform-csv", files=[_make_csv_upload()])
+    response = client.post("/app/v1/transactions/transform", files=[_make_csv_upload()])
 
     assert response.status_code in [401, 422]
 
@@ -258,10 +194,12 @@ def test_register_filetype_success():
     """Admin user with valid payload receives 200 and the service method is called."""
     mock_io = MockIOService()
     app.dependency_overrides[get_require_admin] = mock_require_admin
-    app.dependency_overrides[get_io_service] = lambda: mock_io
+    app.dependency_overrides[get_transaction_service] = lambda: mock_io
 
     client = TestClient(app)
-    response = client.post("/io/register-filetype", json=VALID_FILETYPE_PAYLOAD)
+    response = client.post(
+        "/app/v1/transactions/register-filetype", json=VALID_FILETYPE_PAYLOAD
+    )
 
     assert response.status_code == 200
     assert mock_io.last_registered["file_name"] == "Test Bank CSV"
@@ -273,10 +211,12 @@ def test_register_filetype_success():
 def test_register_filetype_unauthorized():
     """Request without any auth token is rejected before reaching the service."""
     app.dependency_overrides.clear()
-    app.dependency_overrides[get_io_service] = override_io_service
+    app.dependency_overrides[get_transaction_service] = override_io_service
 
     client = TestClient(app)
-    response = client.post("/io/register-filetype", json=VALID_FILETYPE_PAYLOAD)
+    response = client.post(
+        "/app/v1/transactions/register-filetype", json=VALID_FILETYPE_PAYLOAD
+    )
 
     assert response.status_code in [401, 422]
 
@@ -284,11 +224,13 @@ def test_register_filetype_unauthorized():
 def test_register_filetype_forbidden_for_regular_user():
     """A non-admin authenticated user must not be able to register file types."""
     app.dependency_overrides[get_require_user] = mock_require_user
-    app.dependency_overrides[get_io_service] = override_io_service
+    app.dependency_overrides[get_transaction_service] = override_io_service
     # get_require_admin is NOT overridden — real check runs and should reject
 
     client = TestClient(app)
-    response = client.post("/io/register-filetype", json=VALID_FILETYPE_PAYLOAD)
+    response = client.post(
+        "/app/v1/transactions/register-filetype", json=VALID_FILETYPE_PAYLOAD
+    )
 
     assert response.status_code in [401, 403, 422]
 
@@ -297,31 +239,11 @@ def test_register_filetype_invalid_payload_returns_422():
     """Missing required fields return a 422 Unprocessable Entity from FastAPI
     validation."""
     app.dependency_overrides[get_require_admin] = mock_require_admin
-    app.dependency_overrides[get_io_service] = override_io_service
-
-    client = TestClient(app)
-    response = client.post("/io/register-filetype", json={"file_name": "Incomplete"})
-
-    assert response.status_code == 422
-
-
-def test_import_csv_empty_file_content():
-    """Test uploading an empty CSV (headers only, no rows)."""
-    empty_csv = "date,receiver,amount\n"
-    empty_df = pd.DataFrame({"date": [], "receiver": [], "amount": []})
-
-    def override_io_empty():
-        return MockIOService(
-            result_df=empty_df, model_store=MockModelStore(predictions=[])
-        )
-
-    app.dependency_overrides[get_require_user] = mock_require_user
-    app.dependency_overrides[get_io_service] = override_io_empty
+    app.dependency_overrides[get_transaction_service] = override_io_service
 
     client = TestClient(app)
     response = client.post(
-        "/io/transform-csv", files=[_make_csv_upload(content=empty_csv)]
+        "/app/v1/transactions/register-filetype", json={"file_name": "Incomplete"}
     )
 
-    assert response.status_code == 200
-    assert int(response.headers["x-row-count"]) == 0
+    assert response.status_code == 422

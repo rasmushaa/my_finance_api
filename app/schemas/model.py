@@ -23,6 +23,13 @@ class PredictRequest(BaseModel):
     inputs: Dict[str, List[Any]] = Field(
         ...,
         description="A dictionary of input features where keys are feature names and values are lists of feature values.",
+        examples=[
+            {
+                "date": ["2023-01-01", "2023-01-02"],
+                "receiver": ["Grocery Store", "Taxi Company"],
+                "amount": [50.0, 20.0],
+            }
+        ],
     )
 
     def to_dataframe(self) -> pd.DataFrame:

@@ -17,7 +17,7 @@ def cleanup_overrides():
 def test_health_endpoint_basic():
     """Test that health endpoint returns correct response."""
     client = TestClient(app)
-    response = client.get("/health/")
+    response = client.get("/app/v1/health/")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
