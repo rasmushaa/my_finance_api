@@ -5,7 +5,7 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.dependencies.providers import get_google_oauth_service, get_jwt_service
+from app.api.dependencys import get_google_oauth_service, get_jwt_service
 from app.core.errors.auth import CodeExchangeError
 from app.core.errors.base_error import ErrorCode
 from app.main import app
@@ -74,7 +74,7 @@ def test_auth_google_code_success():
     app.dependency_overrides[get_jwt_service] = override_jwt_service
 
     client = TestClient(app)
-    response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
+    response = client.post("/app/v1/auth/google/code", json=VALID_AUTH_PAYLOAD)
 
     assert response.status_code == 200
     data = response.json()
@@ -92,7 +92,7 @@ def test_auth_google_code_exchange_failure_returns_401():
     app.dependency_overrides[get_jwt_service] = override_jwt_service
 
     client = TestClient(app)
-    response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
+    response = client.post("/app/v1/auth/google/code", json=VALID_AUTH_PAYLOAD)
 
     assert response.status_code == 401
     assert response.json()["code"] == ErrorCode.INVALID_TOKEN
@@ -106,13 +106,13 @@ def test_auth_rate_limit_blocks_after_exceeded():
     client = TestClient(app)
 
     for i in range(1):
-        response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
+        response = client.post("/app/v1/auth/google/code", json=VALID_AUTH_PAYLOAD)
         assert (
             response.status_code == 200
         ), f"The {i+1} auth calls request should succeed"
 
     # 6th request should be rate limited
-    response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
+    response = client.post("/app/v1/auth/google/code", json=VALID_AUTH_PAYLOAD)
     assert response.status_code == 429, "The extra auth call should be rate limited"
     data = response.json()
     assert data["code"] == ErrorCode.RATE_LIMIT_EXCEEDED.value
@@ -140,11 +140,11 @@ def test_auth_rate_limit_is_per_email():
         user_info=user_a_info
     )
     for i in range(1):
-        response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
+        response = client.post("/app/v1/auth/google/code", json=VALID_AUTH_PAYLOAD)
         assert response.status_code == 200, f"User A's {i+1} auth calls should succeed"
 
     # User A is now rate limited
-    response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
+    response = client.post("/app/v1/auth/google/code", json=VALID_AUTH_PAYLOAD)
     assert (
         response.status_code == 429
     ), "User A should be rate limited after exceeding limit"
@@ -153,7 +153,7 @@ def test_auth_rate_limit_is_per_email():
     app.dependency_overrides[get_google_oauth_service] = lambda: MockGoogleOAuthService(
         user_info=user_b_info
     )
-    response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
+    response = client.post("/app/v1/auth/google/code", json=VALID_AUTH_PAYLOAD)
     assert (
         response.status_code == 200
     ), "User B should not be affected by User A's rate limit"
@@ -185,20 +185,20 @@ def test_auth_rate_limit_resets_after_window(monkeypatch):
 
     # Exhaust rate limit
     for i in range(1):
-        response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
+        response = client.post("/app/v1/auth/google/code", json=VALID_AUTH_PAYLOAD)
         assert (
             response.status_code == 200
         ), f"The {i+1} auth calls request should succeed"
 
     # Should be blocked
-    response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
+    response = client.post("/app/v1/auth/google/code", json=VALID_AUTH_PAYLOAD)
     assert response.status_code == 429, "The extra auth call should be rate limited"
 
     # Advance time past the window (300 seconds)
     fake_time[0] = 100.0 + 301.0
 
     # Should be allowed again
-    response = client.post("/auth/google/code", json=VALID_AUTH_PAYLOAD)
+    response = client.post("/app/v1/auth/google/code", json=VALID_AUTH_PAYLOAD)
     assert (
         response.status_code == 200
     ), "The auth call should succeed after the rate limit window resets"

@@ -1,11 +1,11 @@
 from typing import Any, Callable, Protocol
 
 from app.core.database_client import GoogleCloudAPI
-from app.services.categories import CategoriesService
+from app.services.assets import AssetService
 from app.services.google_oauth import GoogleOAuthService
-from app.services.io import IOService
 from app.services.jwt import AppJwtService
 from app.services.model import ModelService
+from app.services.transactions import TransactionService
 from app.services.users import UsersService
 
 
@@ -108,10 +108,6 @@ def setup_container():
 
     # Database services
     container.register(
-        "categories_service",
-        create_service_provider(CategoriesService, db_client="cloud_client"),
-    )
-    container.register(
         "users_service",
         create_service_provider(UsersService, db_client="cloud_client"),
     )
@@ -133,15 +129,21 @@ def setup_container():
     # Model service - singleton
     container.register("model_store", lambda: ModelService(), singleton=True)
 
-    # IO service - depends on cloud_client and model_store
+    # Transaction service - depends on cloud_client and model_store
     container.register(
-        "io_service",
+        "transaction_service",
         create_service_provider(
-            IOService,
+            TransactionService,
             db_client="cloud_client",
             model_service="model_store",
         ),
         singleton=True,
+    )
+
+    # Assets service
+    container.register(
+        "asset_service",
+        create_service_provider(AssetService, db_client="cloud_client"),
     )
 
 

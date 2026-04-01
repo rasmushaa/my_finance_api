@@ -1,3 +1,5 @@
+from typing import Dict
+
 from pydantic import BaseModel, Field
 
 
@@ -92,6 +94,25 @@ class FileTypeAppendRequest(BaseModel):
         ...,
         description="The name of the receiver/payee column in the file.",
         examples=["Receiver"],
+    )
+
+
+class TransactionLabelResponse(BaseModel):
+    """Response model for transaction labeling results.
+
+    This model captures the essential information about a transaction and its
+    assigned category label after processing.
+
+    ## Attributes
+    - **labels** (Dict[str, str]): A mapping of transaction labels (keys) to their descriptions (values).
+    """
+
+    labels: Dict[str, str] = Field(
+        ...,
+        description="A mapping of transaction labels (keys) to their descriptions (values).",
+        examples=[
+            {"Groceries": "All food stuff", "Utilities": "Monthly utility bills"}
+        ],
     )
 
 

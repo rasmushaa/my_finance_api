@@ -3,26 +3,45 @@ from io import StringIO
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import Response
 
-from app.api.dependencies.providers import (
-    get_io_service,
+from app.api.dependencys import (
     get_require_admin,
     get_require_user,
+    get_transaction_service,
 )
 from app.schemas.error import ErrorResponse
-from app.schemas.io import (
+from app.schemas.transactions import (
     CSVImportRequest,
     CSVImportResponse,
     FileTypeAppendRequest,
     FileTypeDeleteRequest,
+    TransactionLabelResponse,
 )
-from app.services.io import IOService
+from app.services.transactions import TransactionService
 
-router = APIRouter(prefix="/io", tags=["File IO"])
+router = APIRouter(prefix="/transactions", tags=["User IO"])
 
 
 # -- Transactions ----------------------------------------------------------------------
+@router.get(
+    "/labels",
+    response_model=TransactionLabelResponse,
+    responses={
+        200: {
+            "model": TransactionLabelResponse,
+            "description": "Successfully retrieved transaction labels",
+        },
+    },
+)
+def get_transaction_labels(
+    transaction_service: TransactionService = Depends(get_transaction_service),
+    user: dict = Depends(get_require_user),
+):
+    labels = transaction_service.get_transaction_labels()
+    return TransactionLabelResponse(labels=labels)
+
+
 @router.post(
-    "/transform-csv",
+    "/transform",
     response_model=CSVImportResponse,
     responses={
         200: {
@@ -34,14 +53,14 @@ router = APIRouter(prefix="/io", tags=["File IO"])
 )
 def transform_csv(
     file: UploadFile = File(...),
-    io_service: IOService = Depends(get_io_service),
-    payload: dict = Depends(get_require_user),
+    transaction_service: TransactionService = Depends(get_transaction_service),
+    user: dict = Depends(get_require_user),
 ):
     # Validate content type using CSVImportRequest contract
     CSVImportRequest(content_type=file.content_type or "")
 
-    # Transform file and run predictions (handled together by IOService)
-    transformed_df = io_service.transform_input_file(file.file)
+    # Transform file and run predictions (handled together by TransactionService)
+    transformed_df = transaction_service.transform_input_file(file.file)
 
     # Build and validate response metadata
     output_filename = f"processed_{file.filename}"
@@ -68,7 +87,7 @@ def transform_csv(
 
 
 @router.post(
-    "/append-transactions",
+    "/upload",
     responses={
         200: {"description": "CSV data appended to table successfully"},
         400: {
@@ -77,15 +96,15 @@ def transform_csv(
         },
     },
 )
-def append_transactions(
+def upload_transactions(
     file: UploadFile = File(...),
-    io_service: IOService = Depends(get_io_service),
-    payload: dict = Depends(get_require_user),
+    transaction_service: TransactionService = Depends(get_transaction_service),
+    user: dict = Depends(get_require_user),
 ):
     # Validate content type using CSVImportRequest contract
     CSVImportRequest(content_type=file.content_type or "")
 
-    io_service.append_transactions(file.file, user_email=payload["sub"])
+    transaction_service.upload_transactions(file.file, user_email=user["sub"])
     return Response(status_code=200, content="CSV data appended to table successfully")
 
 
@@ -99,10 +118,10 @@ def append_transactions(
 )
 def register_filetype(
     payload: FileTypeAppendRequest,
-    io_service: IOService = Depends(get_io_service),
+    transaction_service: TransactionService = Depends(get_transaction_service),
     user: dict = Depends(get_require_admin),
 ):
-    io_service.add_filetype_to_database(**payload.model_dump())
+    transaction_service.add_filetype_to_database(**payload.model_dump())
     return Response(status_code=200, content="File type registered successfully")
 
 
@@ -115,10 +134,10 @@ def register_filetype(
 )
 def delete_filetype(
     payload: FileTypeDeleteRequest,
-    io_service: IOService = Depends(get_io_service),
+    transaction_service: TransactionService = Depends(get_transaction_service),
     user: dict = Depends(get_require_admin),
 ):
-    io_service.delete_filetype_from_database(payload.file_name)
+    transaction_service.delete_filetype_from_database(payload.file_name)
     return Response(
         status_code=200, content=f"File type deleted successfully {payload.file_name}"
     )

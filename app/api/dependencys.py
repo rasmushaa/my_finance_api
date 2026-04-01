@@ -8,19 +8,20 @@ coupling between API endpoints and service implementations.
 
 from app.core.container import container
 from app.core.security import require_role, require_user
+from app.services.assets import AssetService
 from app.services.categories import CategoriesService
 from app.services.google_oauth import GoogleOAuthService
-from app.services.io import IOService
 from app.services.jwt import AppJwtService
 from app.services.model import ModelService
+from app.services.transactions import TransactionService
 from app.services.users import UsersService
 
-# Define role-based dependencies
+# -- Security -----------------------------------------------------------------
 get_require_user = require_user
 get_require_admin = require_role("admin")
 
 
-# Service provider functions that resolve services from the DI container
+# -- Services -----------------------------------------------------------------
 def get_categories_service() -> CategoriesService:
     return container.resolve("categories_service")
 
@@ -41,5 +42,9 @@ def get_jwt_service() -> AppJwtService:
     return container.resolve("jwt_service")
 
 
-def get_io_service() -> IOService:
-    return container.resolve("io_service")
+def get_transaction_service() -> TransactionService:
+    return container.resolve("transaction_service")
+
+
+def get_asset_service() -> AssetService:
+    return container.resolve("asset_service")

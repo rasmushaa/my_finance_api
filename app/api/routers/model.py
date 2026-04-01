@@ -6,7 +6,7 @@ with and retrieve information about the machine learning model.
 
 from fastapi import APIRouter, Depends
 
-from app.api.dependencies.providers import get_model_store, get_require_admin
+from app.api.dependencys import get_model_store, get_require_admin
 from app.schemas.error import ErrorResponse
 from app.schemas.model import ModelMetadataResponse, PredictRequest, PredictResponse
 from app.services.model import ModelService

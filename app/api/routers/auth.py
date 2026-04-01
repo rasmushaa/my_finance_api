@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends
 
-from app.api.dependencies.providers import get_google_oauth_service, get_jwt_service
+from app.api.dependencys import get_google_oauth_service, get_jwt_service
 from app.core.errors.auth import AuthRateLimitExceededError
 from app.core.rate_limiter import EmailRateLimiter
 from app.schemas.auth import GoogleCodeExchangeRequest, GoogleCodeExchangeResponse

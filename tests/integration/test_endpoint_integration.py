@@ -13,6 +13,7 @@ import logging
 import os
 import subprocess
 
+import dotenv
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
@@ -29,27 +30,37 @@ subprocess.run(
     ["uv", "run", "python", "scripts/create_local_dev_tokens.py"], check=True
 )  # Refresh local dev tokens
 
+dotenv.load_dotenv()
+
 API_BASE_URL = "https://localhost:8081/"
 MOCK_FILE_NAME = "local-integrtion-mock-data"
 
 
 @pytest.mark.integration
-def test_category_integration():
+def test_asset_integration():
 
     with TestClient(app) as client:
-        response = client.get(
-            API_BASE_URL + "data/categories/expenditures",
-            headers={"Authorization": f"Bearer {os.environ['LOCAL_DEV_USER_TOKEN']}"},
-        )
-        logger.info(f"Categories response: {response.status_code} {response.text}")
-        assert response.status_code == 200, "Failed to fetch categories"
 
-        response = client.get(
-            API_BASE_URL + "data/categories/assets",
-            headers={"Authorization": f"Bearer {os.environ['LOCAL_DEV_USER_TOKEN']}"},
+        # Upload asset data
+        response = client.post(
+            API_BASE_URL + "app/v1/assets/upload",
+            json={
+                "cash": 1000.0,
+                "other_assets": 500.0,
+                "apartment": 50000.0,
+                "capital_assets_value": 25000.0,
+                "capital_assets_unrealized_gains": 5000.0,
+                "mortgage": -120000.0,
+                "student_loan": -12000.0,
+                "other_liabilities": -3000.0,
+                "realized_capital_gains": 2000.0,
+                "realized_capital_losses": -700.0,
+                "date": "2024-01-31",
+            },
+            headers={"Authorization": f"Bearer {os.environ['LOCAL_DEV_ADMIN_TOKEN']}"},
         )
-        logger.info(f"Categories response: {response.status_code} {response.text}")
-        assert response.status_code == 200, "Failed to fetch categories"
+        logger.info(f"Upload asset response: {response.status_code} {response.text}")
+        assert response.status_code == 200, "Failed to upload asset data"
 
 
 @pytest.mark.integration
@@ -69,7 +80,7 @@ def test_transaction_integration():
 
         # 1. (Soft) Delete existing file type and related entries to ensure clean state
         response = client.post(
-            API_BASE_URL + "io/delete-filetype",
+            API_BASE_URL + "app/v1/transactions/delete-filetype",
             json={"file_name": MOCK_FILE_NAME},
             headers={"Authorization": f"Bearer {os.environ['LOCAL_DEV_ADMIN_TOKEN']}"},
         )
@@ -79,7 +90,7 @@ def test_transaction_integration():
 
         # 2. Create new file type
         response = client.post(
-            API_BASE_URL + "io/register-filetype",
+            API_BASE_URL + "app/v1/transactions/register-filetype",
             json={
                 "cols": df_mock.columns.tolist(),
                 "file_name": MOCK_FILE_NAME,
@@ -97,7 +108,7 @@ def test_transaction_integration():
 
         # 3. Transform and add predictions to the mock data using the API
         response = client.post(
-            API_BASE_URL + "io/transform-csv",
+            API_BASE_URL + "app/v1/transactions/transform",
             files={"file": ("mock_data.csv", df_mock.to_csv(index=False), "text/csv")},
             headers={"Authorization": f"Bearer {os.environ['LOCAL_DEV_USER_TOKEN']}"},
         )
@@ -120,7 +131,7 @@ def test_transaction_integration():
 
         # 5. Append the transformed data to the transactions table
         response = client.post(
-            API_BASE_URL + "io/append-transactions",
+            API_BASE_URL + "app/v1/transactions/upload",
             files={
                 "file": (
                     "transformed_data.csv",
@@ -134,3 +145,13 @@ def test_transaction_integration():
             f"Append transactions response: {response.status_code} {response.text}"
         )
         assert response.status_code == 200, "Failed to append transactions"
+
+        # 6. Verify the label end point works
+        response = client.get(
+            API_BASE_URL + "app/v1/transactions/labels",
+            headers={"Authorization": f"Bearer {os.environ['LOCAL_DEV_USER_TOKEN']}"},
+        )
+        logger.info(f"Get labels response: {response.status_code} {response.text}")
+        assert response.status_code == 200, "Failed to get labels"
+        labels = response.json()
+        assert isinstance(labels, dict), "Labels response is not a dict"

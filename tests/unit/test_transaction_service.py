@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from app.core.errors.domain import UnknownFileTypeError
-from app.services.io import IOService
+from app.services.transactions import TransactionService
 
 
 class MockModelStore:
@@ -130,11 +130,11 @@ def make_csv_bytes(content: str) -> io.BytesIO:
 
 def test_generate_filetype_id_produces_schema_string(setup_env):
     """KeyID is built from column names joined by '-'."""
-    service = IOService(db_client=Mock(), model_service=MockModelStore())
+    service = TransactionService(db_client=Mock(), model_service=MockModelStore())
     df = pd.DataFrame(
         {"Date": ["2024-01-01"], "Amount": ["10.0"], "Receiver": ["Shop"]}
     )
-    key_id = service._IOService__generate_filetype_id(list(df.columns))
+    key_id = service._TransactionService__generate_filetype_id(list(df.columns))
 
     assert key_id == "Date-Amount-Receiver"
 
@@ -142,10 +142,10 @@ def test_generate_filetype_id_produces_schema_string(setup_env):
 def test_get_filetype_info_returns_dict_for_known_id(setup_env):
     """Known KeyID should resolve to a dict with all expected fields."""
     mock_client = make_stateful_mock_client(setup_env)
-    service = IOService(db_client=mock_client, model_service=MockModelStore())
+    service = TransactionService(db_client=mock_client, model_service=MockModelStore())
 
     known_id = "Date-Amount-Receiver"
-    result = service._IOService__get_filetype_info_from_database(known_id)
+    result = service._TransactionService__get_filetype_info_from_database(known_id)
 
     assert isinstance(result, dict)
     assert result["FileName"] == "Test Bank CSV"
@@ -158,15 +158,15 @@ def test_get_filetype_info_returns_dict_for_known_id(setup_env):
 def test_get_filetype_info_raises_for_unknown_id(setup_env):
     """Unknown KeyID should raise UnknownFileTypeError."""
     mock_client = make_stateful_mock_client(setup_env)
-    service = IOService(db_client=mock_client, model_service=MockModelStore())
+    service = TransactionService(db_client=mock_client, model_service=MockModelStore())
 
     with pytest.raises(UnknownFileTypeError):
-        service._IOService__get_filetype_info_from_database("nonexistent:key")
+        service._TransactionService__get_filetype_info_from_database("nonexistent:key")
 
 
 def test_transform_input_file_renames_and_casts(setup_env):
     """Transformation should rename columns, cast types, and select correct columns."""
-    service = IOService(db_client=Mock(), model_service=MockModelStore())
+    service = TransactionService(db_client=Mock(), model_service=MockModelStore())
 
     raw_df = pd.DataFrame(
         {
@@ -183,7 +183,7 @@ def test_transform_input_file_renames_and_casts(setup_env):
         "ReceiverColumn": "Receiver",
     }
 
-    result = service._IOService__transform_input_file(raw_df, file_format_info)
+    result = service._TransactionService__transform_input_file(raw_df, file_format_info)
 
     assert list(result.columns) == ["Date", "Amount", "Receiver", "Category"]
     assert result["Amount"].dtype == float
@@ -215,7 +215,7 @@ def test_open_binary_as_pandas_returns_transformed_df(setup_env):
     csv_file = make_csv_bytes(csv_content)
 
     mock_client = make_stateful_mock_client(setup_env)
-    service = IOService(db_client=mock_client, model_service=MockModelStore())
+    service = TransactionService(db_client=mock_client, model_service=MockModelStore())
 
     result = service.transform_input_file(csv_file)
 
@@ -242,7 +242,7 @@ def test_open_binary_as_pandas_raises_for_unknown_schema(setup_env):
     csv_file = make_csv_bytes(csv_content)
 
     mock_client = make_stateful_mock_client(setup_env)
-    service = IOService(db_client=mock_client, model_service=MockModelStore())
+    service = TransactionService(db_client=mock_client, model_service=MockModelStore())
 
     with pytest.raises(UnknownFileTypeError):
         service.transform_input_file(csv_file)
@@ -251,7 +251,7 @@ def test_open_binary_as_pandas_raises_for_unknown_schema(setup_env):
 def test_add_new_filetype_and_open_binary(setup_env):
     """Test that a new file type can be added to the database and retrieved."""
     mock_client = make_stateful_mock_client(setup_env)
-    service = IOService(db_client=mock_client, model_service=MockModelStore())
+    service = TransactionService(db_client=mock_client, model_service=MockModelStore())
 
     new_df = pd.DataFrame(
         {
