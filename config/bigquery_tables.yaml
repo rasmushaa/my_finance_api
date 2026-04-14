@@ -91,7 +91,7 @@ tables:
         type: STRING
         mode: REQUIRED
         description: Category of the transaction
-      - name: _RowProcessingID
+      - name: RowProcessingID
         type: INT64
         mode: NULLABLE
         description: 64-bit ID (input features and timestamp) used to link original input rows to model predictions
@@ -169,11 +169,15 @@ tables:
         type: STRING
         mode: REQUIRED
         description: Commit SHA of the model used for prediction
+      - name: ModelCommitHeadSHA
+        type: STRING
+        mode: REQUIRED
+        description: Commit head (latest commit before merge) SHA of the model used for prediction
       - name: ModelArchitecture
         type: STRING
         mode: REQUIRED
         description: Architecture of the model used for prediction
-      - name: _RowProcessingID
+      - name: RowProcessingID
         type: INT64
         mode: NULLABLE
         description: 64-bit ID (input features and timestamp) used to link original input rows to model predictions

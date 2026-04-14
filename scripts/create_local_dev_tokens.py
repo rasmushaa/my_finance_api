@@ -1,16 +1,13 @@
-"""A simple script to create local development tokens for testing purposes,
+"""Generate local development JWT tokens and persist them to `.env`.
 
-and write them to a .env file. These tokens can be used in integration tests or local
-development to authenticate as a user or admin without needing to go through the full
-authentication flow.
+This utility issues one user token and one admin token using ``AppJwtService`` with a
+mocked user backend. Generated values are written to:
 
-The credential lifetime is determined by the APP_JWT_EXP_DELTA_MINUTES setting in the
-same .env file.
+- ``LOCAL_DEV_USER_TOKEN``
+- ``LOCAL_DEV_ADMIN_TOKEN``
 
-This is not intended for production use.
-
-If this fails for private artifactory auth, try to re sync uv using
-`scripts/uv_sync.sh`.
+Token lifetime follows ``APP_JWT_EXP_DELTA_MINUTES`` from current environment.
+Intended for local development and integration testing only.
 """
 
 import sys
@@ -27,7 +24,9 @@ class MockUserClient:
     def get_user_by_email(self, email):
         users = {
             "user@example.com": {"role": "user"},
-            "admin@example.com": {"role": "admin"},
+            "rasmus.haapaniemi1@gmail.com": {
+                "role": "admin"
+            },  # Local admin identity used by integration tests.
         }
         return users.get(email)
 
@@ -35,8 +34,8 @@ class MockUserClient:
 mock_client = MockUserClient()
 jwt_service = AppJwtService(mock_client)
 
-user_token = jwt_service.authenticate("user@example.com")
-admin_token = jwt_service.authenticate("admin@example.com")
+user_token, user_role = jwt_service.authenticate("user@example.com")
+admin_token, admin_role = jwt_service.authenticate("rasmus.haapaniemi1@gmail.com")
 
 # Check if .env file exists and read existing content
 try:

@@ -22,7 +22,13 @@ class GoogleOAuthService:
     """Service for handling Google OAuth operations."""
 
     def __init__(self, config: GoogleOAuthConfig | None = None):
-        """Initialize Google OAuth service."""
+        """Initialize Google OAuth service.
+
+        Parameters
+        ----------
+        config : GoogleOAuthConfig | None
+            OAuth client credentials and token endpoint config.
+        """
 
         oauth_config = config or GoogleOAuthConfig.from_env()
         self.client_id = oauth_config.client_id
@@ -47,10 +53,21 @@ class GoogleOAuthService:
         Returns
         -------
         Dict[str, Any]
-            User information extracted from the ID token, including email and other claims
+            Verified user claims extracted from Google ID token.
+
+        Raises
+        ------
+        CodeExchangeError
+            If Google code exchange endpoint returns a non-success response.
+        MissingIdTokenError
+            If token exchange response does not include ``id_token``.
+        InvalidIdTokenError
+            If token issuer is invalid or signature verification fails.
+        MissingEmailError
+            If verified token does not include email claim.
         """
 
-        # Exhange and get id_token from Google OAuth token endpoint
+        # Exchange authorization code for ID token at Google OAuth endpoint.
         data = {
             "client_id": self.client_id,
             "client_secret": self.client_secret,

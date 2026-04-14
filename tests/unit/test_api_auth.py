@@ -2,7 +2,7 @@
 
 from fastapi.testclient import TestClient
 
-from app.api.dependencys import get_google_oauth_service, get_jwt_service
+from app.api.dependencies import get_google_oauth_service, get_jwt_service
 from app.core.errors.auth import UserNotFoundError
 from app.core.errors.base_error import ErrorCode
 from app.main import app
@@ -36,10 +36,10 @@ def test_auth_google_code_success():
 
     assert response.status_code == 200
     data = response.json()
-    assert data["encoded_token"] == "mock-jwt-token-for-testing"
-    assert data["token_type"] == "Bearer"
+    assert data["encoded_jwt_token"] == "mock-jwt-token-for-testing"
     assert data["user_name"] == "Test User"
     assert data["user_picture_url"] == "https://example.com/photo.jpg"
+    assert data["user_role"] == "user"
 
 
 def test_auth_google_code_exchange_failure_returns_401():

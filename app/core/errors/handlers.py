@@ -1,3 +1,5 @@
+"""FastAPI exception handlers for custom application errors."""
+
 import logging
 
 from fastapi import Request
@@ -11,12 +13,19 @@ logger = logging.getLogger(__name__)
 
 
 def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
-    """Handles AppError exceptions and returns a structured JSON response with error
-    details.
+    """Handle ``AppError`` exceptions and return structured JSON response.
 
-    This function is registered as an exception handler for AppError in the FastAPI
-    application, allowing it to catch any exceptions that inherit from AppError and
-    return a consistent error response format.
+    Parameters
+    ----------
+    request : Request
+        FastAPI request object used for extracting client context.
+    exc : AppError
+        Raised application exception.
+
+    Returns
+    -------
+    JSONResponse
+        Standardized error payload matching ``ErrorResponse`` schema.
     """
 
     logger.error(

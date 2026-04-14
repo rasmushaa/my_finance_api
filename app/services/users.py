@@ -1,3 +1,5 @@
+"""User lookup service for authentication and authorization flows."""
+
 import logging
 import re
 from typing import Dict
@@ -17,21 +19,23 @@ class UsersService:
 
         Parameters
         ----------
-            db_client:
-                Database client instance to handle database operations.
+        db_client :
+            Database client instance used for credential lookups.
         """
         self.db_client = db_client
 
     def _validate_email(self, email: str) -> bool:
-        """Validate email format and security.
+        """Validate email format and reject obvious injection patterns.
 
         Parameters
         ----------
-            email: Input to validate as email
+        email : str
+            Candidate email address from external auth provider.
 
         Returns
         -------
-            bool: True if email is valid and safe, False otherwise
+        bool
+            ``True`` when input looks like a safe email string.
         """
         # Handle None and non-string inputs
         if email is None:
@@ -75,31 +79,34 @@ class UsersService:
         return True
 
     def _sanitize_email(self, email: str) -> str:
-        """Sanitize email by escaping dangerous characters.
+        """Sanitize email by escaping single quotes.
 
         Parameters
         ----------
-            email: Email string to sanitize
+        email : str
+            Email string to sanitize.
 
         Returns
         -------
-            str: Sanitized email string
+        str
+            Sanitized email string.
         """
         # Escape single quotes by doubling them (SQL standard)
         return email.replace("'", "''")
 
     def get_user_by_email(self, email: str) -> Dict[str, str]:
-        """Get all user information.
+        """Fetch user identity and role by email.
 
         Parameters
         ----------
-            email:
-                The email of the user to fetch information for.
+        email : str
+            User email to resolve.
+
         Returns
         -------
-            Dict[str, str]:
-                Contains user information such as email, and role.
-                Returns empty dict if user not found or invalid input.
+        Dict[str, str]
+            Mapping containing user information (for example ``email`` and ``role``),
+            or empty dict for invalid/non-existent users.
         """
         # Validate input for security and format
         if not self._validate_email(email):
@@ -108,21 +115,23 @@ class UsersService:
             )
             return {}
 
-        # Sanitize the email for SQL safety
-        sanitized_email = self._sanitize_email(email.strip())
+        normalized_email = email.strip()
 
-        # Client handles errors
+        # Client handles database errors.
         sql = f"""
         SELECT
             UserEmail as email,
             UserRole as role
         FROM
-            {self.db_client.dataset}.d_credentials
+            `{self.db_client.dataset}.d_credentials`
         WHERE
-            UserEmail = '{sanitized_email}'
-            AND _RowStatus != 'd'
+            UserEmail = @email
+            AND _RowStatus != @deleted_status
         """  # nosec B608
-        df = self.db_client.sql_to_pandas(sql)
+        df = self.db_client.sql_to_pandas(
+            sql,
+            params={"email": normalized_email, "deleted_status": "d"},
+        )
         logger.debug(f"Fetched user information from BigQuery:\n{df}")
 
         # Return the result as dict or empty dict if no results

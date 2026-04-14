@@ -1,8 +1,8 @@
 """Basic integration test for transaction processing flow.
 
 The test uses the actual BigQuery Dev environment and the local FastAPI app instance.
-The FastAPI has the privilidges of the terminal user running the test. Remember to re
-create local dev tokens if expired and update .env file accordingly.
+The FastAPI app inherits credentials of the terminal user running the test. Remember
+to refresh local dev tokens if expired and update `.env` accordingly.
 
 Run `uv run pytest -m integration -s` to execute the test and see print statements for
 debugging.
@@ -41,6 +41,7 @@ def integration_env():
         pytest.fail(
             f"Missing required integration environment variables: {', '.join(missing)}"
         )
+    yield
 
 
 @pytest.mark.integration
@@ -64,10 +65,22 @@ def test_asset_integration(integration_env):
                 "realized_capital_losses": -700.0,
                 "date": "2024-01-31",
             },
-            headers={"Authorization": f"Bearer {os.environ['LOCAL_DEV_ADMIN_TOKEN']}"},
+            headers={"Authorization": f"Bearer {os.environ['LOCAL_DEV_USER_TOKEN']}"},
         )
         logger.info(f"Upload asset response: {response.status_code} {response.text}")
         assert response.status_code == 200, "Failed to upload asset data"
+
+        # Validate parameterized SQL path in AssetService.get_latest_entry_stats
+        response = client.get(
+            API_BASE_URL + "app/v1/assets/latest-entry",
+            headers={"Authorization": f"Bearer {os.environ['LOCAL_DEV_USER_TOKEN']}"},
+        )
+        logger.info(
+            f"Get latest asset response: {response.status_code} {response.text}"
+        )
+        assert response.status_code == 200, "Failed to get latest asset data"
+        latest_asset = response.json()
+        assert latest_asset["date"] == "2024-01-31"
 
 
 @pytest.mark.integration
@@ -87,7 +100,7 @@ def test_transaction_integration(integration_env):
 
         # 1. (Soft) Delete existing file type and related entries to ensure clean state
         response = client.post(
-            API_BASE_URL + "app/v1/transactions/delete-filetype",
+            API_BASE_URL + "app/v1/filetypes/delete",
             json={"file_name": MOCK_FILE_NAME},
             headers={"Authorization": f"Bearer {os.environ['LOCAL_DEV_ADMIN_TOKEN']}"},
         )
@@ -97,7 +110,7 @@ def test_transaction_integration(integration_env):
 
         # 2. Create new file type
         response = client.post(
-            API_BASE_URL + "app/v1/transactions/register-filetype",
+            API_BASE_URL + "app/v1/filetypes/register",
             json={
                 "cols": df_mock.columns.tolist(),
                 "file_name": MOCK_FILE_NAME,
@@ -130,7 +143,7 @@ def test_transaction_integration(integration_env):
             "Amount",
             "Receiver",
             "Category",
-            "_RowProcessingID",
+            "RowProcessingID",
         ], "Transformed columns do not match expected"
         assert len(transformed_df) == len(
             df_mock
@@ -162,3 +175,29 @@ def test_transaction_integration(integration_env):
         assert response.status_code == 200, "Failed to get labels"
         labels = response.json()
         assert isinstance(labels, dict), "Labels response is not a dict"
+
+        # 7. Validate parameterized SQL path in TransactionService.get_latest_entry_date
+        response = client.get(
+            API_BASE_URL + "app/v1/transactions/latest-entry",
+            headers={"Authorization": f"Bearer {os.environ['LOCAL_DEV_USER_TOKEN']}"},
+        )
+        logger.info(
+            f"Get latest transaction entry response: {response.status_code} {response.text}"
+        )
+        assert (
+            response.status_code == 200
+        ), "Failed to get latest transaction entry date"
+        assert "latest_entry_date" in response.json()
+
+        # 8. Validate parameterized SQL path in ReportingService.get_model_accuracy_table
+        response = client.get(
+            API_BASE_URL + "app/v1/reporting/model-accuracy",
+            params={"starting_from": "2020-01-01"},
+            headers={"Authorization": f"Bearer {os.environ['LOCAL_DEV_ADMIN_TOKEN']}"},
+        )
+        logger.info(
+            f"Get model accuracy response: {response.status_code} {response.text[:300]}"
+        )
+        assert response.status_code == 200, "Failed to fetch model accuracy reporting"
+        reporting_payload = response.json()
+        assert "rows" in reporting_payload

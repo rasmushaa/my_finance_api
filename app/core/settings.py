@@ -24,6 +24,7 @@ def _required_env(name: str) -> str:
 
 
 def _int_env(name: str) -> int:
+    """Return required env var parsed as integer."""
     raw = _required_env(name)
     try:
         return int(raw)
@@ -38,12 +39,12 @@ class JWTConfig:
 
     Attributes
     ----------
-    secret: str
-        The main internal sectret used for signing JWTs. Must be kept secure and not shared.
+    secret : str
+        Secret key used to sign and verify application JWTs.
     token_expire_minutes: int
-        How long JWT tokens issued by the app should be valid, in minutes.
+        Token TTL in minutes.
     algorithm: str
-        The signing algorithm to use for JWTs. Defaults to "HS256".
+        Signing algorithm used for JWTs. Defaults to ``"HS256"``.
     """
 
     secret: str
@@ -52,6 +53,7 @@ class JWTConfig:
 
     @classmethod
     def from_env(cls) -> JWTConfig:
+        """Load JWT configuration from environment variables."""
         return cls(
             secret=_required_env("APP_JWT_SECRET"),
             token_expire_minutes=_int_env("APP_JWT_EXP_DELTA_MINUTES"),
@@ -64,12 +66,12 @@ class GoogleOAuthConfig:
 
     Attributes
     ----------
-    client_id: str
+    client_id : str
         The client ID for Google OAuth.
-    client_secret: str
+    client_secret : str
         The client secret for Google OAuth.
-    token_uri: str
-        The token URI for Google OAuth. Defaults to "https://oauth2.googleapis.com/token".
+    token_uri : str
+        OAuth token exchange endpoint.
     """
 
     client_id: str
@@ -78,6 +80,7 @@ class GoogleOAuthConfig:
 
     @classmethod
     def from_env(cls) -> GoogleOAuthConfig:
+        """Load Google OAuth configuration from environment variables."""
         return cls(
             client_id=_required_env("GOOGLE_OAUTH_CLIENT_ID"),
             client_secret=_required_env("GOOGLE_OAUTH_CLIENT_SECRET"),
@@ -92,19 +95,22 @@ class BigQueryConfig:
 
     Attributes
     ----------
-    project_id: str | None
-        The GCP project ID for BigQuery. Can be None if not set.
-    dataset_base: str
-        The base name for the BigQuery dataset.
-    location: str | None
-        The location for the BigQuery dataset. Can be None if not set.
-    environment: str
-        The environment suffix for the dataset. Defaults to "dev".
+    project_id : str
+        Google Cloud project ID used for BigQuery and GCS clients.
+    dataset_base : str
+        Base dataset name without environment suffix.
+    location : str
+        BigQuery location (for example ``"europe-north1"``).
+    bucket_name : str
+        GCS bucket name used for model artifacts and manifest loading.
+    environment : str
+        Environment suffix used for dataset partitioning. Defaults to ``"dev"``.
     """
 
-    project_id: str | None
+    project_id: str
     dataset_base: str
-    location: str | None
+    location: str
+    bucket_name: str
     environment: str = "dev"
 
     @property
@@ -114,9 +120,37 @@ class BigQueryConfig:
 
     @classmethod
     def from_env(cls) -> BigQueryConfig:
+        """Load BigQuery + GCS runtime configuration from environment variables."""
         return cls(
-            project_id=os.getenv("GCP_PROJECT_ID"),
+            project_id=_required_env("GCP_PROJECT_ID"),
             dataset_base=_required_env("GCP_BQ_DATASET"),
-            location=os.getenv("GCP_LOCATION"),
-            environment=os.getenv("ENV") or "dev",
+            location=_required_env("GCP_LOCATION"),
+            environment=os.getenv("ENV", "dev"),
+            bucket_name=_required_env("GCP_BUCKET_NAME"),
+        )
+
+
+# -- Model Artifactory settings --------------------------------------------------
+@dataclass(frozen=True)
+class ModelArtifactoryConfig:
+    """Model Artifactory runtime settings.
+
+    Attributes
+    ----------
+    gcs_bucket_name : str
+        GCS bucket where model artifacts and manifest are stored.
+    mlflow_tracking_uri : str
+        MLflow tracking server URI.
+    """
+
+    gcs_bucket_name: str
+    mlflow_tracking_uri: str
+    model_name: str = "BankingModel"
+
+    @classmethod
+    def from_env(cls) -> ModelArtifactoryConfig:
+        """Load model-artifact tooling configuration from environment variables."""
+        return cls(
+            gcs_bucket_name=_required_env("GCP_BUCKET_NAME"),
+            mlflow_tracking_uri=_required_env("MLFLOW_TRACKING_URI"),
         )

@@ -1,113 +1,155 @@
 # My Finance API
 
-FastAPI backend for personal finance ingestion and ML-assisted transaction categorization.
+<p align="center">
+  <img src="https://capsule-render.vercel.app/api?type=waving&height=260&color=0:0f766e,45:0369a1,100:0f172a&text=My%20Finance%20API&fontColor=ffffff&fontSize=58&animation=fadeIn&fontAlignY=40&desc=FastAPI%20%7C%20BigQuery%20%7C%20MLflow%20for%20Transaction%20Intelligence&descAlignY=63" alt="My Finance API hero banner" />
+</p>
 
-This is a hobby project deployed publicly on Google Cloud Run. The codebase follows pragmatic architecture patterns (DI container, typed settings, explicit schemas) without claiming full enterprise production hardening.
+A production-style FastAPI backend for personal finance ingestion, transaction normalization, prediction logging, and model tracebility on Google Cloud.
 
-[![Swagger](https://img.shields.io/badge/Swagger-Docs-blue.svg)](https://my-finance-api-prod-109245832287.europe-north1.run.app/docs)
+[![Swagger](https://img.shields.io/badge/Live%20API-Swagger-blue.svg)](https://my-finance-api-prod-109245832287.europe-north1.run.app/docs)
 [![CI](https://github.com/rasmushaa/my_finance_api/actions/workflows/deploy.yml/badge.svg)](https://github.com/rasmushaa/my_finance_api/actions/workflows/deploy.yml)
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB.svg)](https://www.python.org/)
+[![Framework](https://img.shields.io/badge/FastAPI-Backend-009688.svg)](https://fastapi.tiangolo.com/)
+
+## Project snapshot
+
+- Problem: ingest bank CSV exports with varying schemas, normalize into a canonical format, run model inference, and persist both facts and prediction metadata.
+- Architecture: layered FastAPI application (`api -> services -> core`) with explicit dependency wiring in a lightweight container.
+- Data platform: BigQuery for primary storage, Cloud Storage for model artifacts and manifest, MLflow-compatible model loading.
+- Deployment: Cloud Run with branch-based GitHub Actions CI/CD.
+- Testing approach: DuckDB-backed mock client for unit tests and real BigQuery dev-dataset integration tests.
 
 ## Tech Stack
 
 - Python 3.11
 - FastAPI + Pydantic
-- Google BigQuery
-- MLflow-managed model artifacts
-- Dependency management with `uv`
-- Testing with `pytest` + DuckDB-backed mock client
+- Google BigQuery + Google Cloud Storage
+- MLflow model artifacts
+- `uv` for dependency management
+- `pytest` with unit and integration markers
 
-## Project Layout
+## Architecture
 
-```text
-app/
-  api/                # Routers and dependency providers
-  core/               # DI container, db client, settings, security, errors
-  schemas/            # Pydantic request/response contracts
-  services/           # Business logic
-config/
-  bigquery_tables.yaml # BigQuery table schema source-of-truth
-scripts/
-  init_gbq_tables.py   # Creates BigQuery tables from YAML schema
-  bigquery_table_config.py
-  load_model_artifacts.py
-tests/
-  unit/
-  integration/
-  helpers/
+```mermaid
+graph TD
+    A[Client] --> B[/app/v1 routers]
+    B --> C[FastAPI Dependencies]
+    C --> D[DI Container]
+    D --> E[Services Layer]
+    E --> F[GoogleCloudAPI]
+    F --> G[(BigQuery)]
+    F --> H[(Cloud Storage)]
+    E --> I[ModelService]
 ```
 
-## Architecture Notes
+### Key Design Choices
 
-- Dependency wiring is centralized in `app/core/container.py`.
-- Runtime settings are typed (`app/core/settings.py`) and loaded from env vars.
-- API contracts live in `app/schemas/`.
-- Domain and infrastructure errors are unified under `AppError` and mapped to consistent HTTP responses.
-- BigQuery table schema is defined once in `config/bigquery_tables.yaml` and consumed by scripts/tests.
+- `app/core/container.py`: central service wiring and lifecycle registration.
+- `app/core/settings.py`: typed, immutable env configuration objects.
+- `app/core/database_client.py`: BigQuery + GCS abstraction with parameterized query support.
+- `app/core/errors/*`: unified error taxonomy mapped to consistent API error payloads.
+- `config/bigquery_tables.yaml`: canonical table schema source for bootstrap scripts and test helpers.
 
-## BigQuery Schema Source-of-Truth
+## API Surface (v1)
 
-`config/bigquery_tables.yaml` is the canonical schema contract for:
+Base prefix: `/app/v1`
 
-1. Table initialization via `scripts/init_gbq_tables.py`
-2. Test mock-table validation in `tests/helpers/duckdb_mock_client.py`
+### Health
 
-If a table schema changes, update this YAML first, then update service logic and tests.
+- `GET /health/`
+
+### Auth
+
+- `POST /auth/google/code`
+
+### Model (admin)
+
+- `GET /model/metadata`
+- `GET /model/manifest`
+- `POST /model/reload`
+
+### Transactions (user)
+
+- `GET /transactions/labels`
+- `GET /transactions/latest-entry`
+- `POST /transactions/transform`
+- `POST /transactions/upload`
+
+### File Types (admin)
+
+- `GET /filetypes/list`
+- `POST /filetypes/register`
+- `POST /filetypes/delete`
+
+### Assets (user)
+
+- `POST /assets/upload`
+- `GET /assets/latest-entry`
+
+### Reporting (admin)
+
+- `GET /reporting/model-accuracy?starting_from=YYYY-MM-DD`
+
+Interactive docs:
+
+- Swagger: `/docs`
+- ReDoc: `/redoc`
+
+## Documentation Conventions
+
+- Non-router Python modules use NumPy-style docstrings for maintainability and tool-friendly code understanding.
+- Router endpoint handlers use Markdown-style sections to improve generated Swagger descriptions.
+- Data model fields are documented directly in schema definitions for API clarity.
 
 ## Local Development
 
-### Prerequisites
+### 1. Prerequisites
 
 - Python 3.11
 - `uv`
-- `gcloud` CLI authenticated for private package index and GCP access
+- `gcloud` CLI authenticated for GCP access
 
-### Install Dependencies
+### 2. Install Dependencies
 
 ```bash
 ./scripts/uv_sync.sh
 ```
 
-Alternative manual install:
+### 3. Environment Variables
 
-```bash
-TOKEN="$(gcloud auth print-access-token)"
-uv sync --group dev \
-  --extra-index-url "https://oauth2accesstoken:${TOKEN}@europe-north1-python.pkg.dev/rasmus-prod/python-packages/simple/"
-```
-
-### Environment Variables
-
-Minimum runtime variables:
+Required runtime variables:
 
 ```bash
 export APP_JWT_SECRET="your-jwt-secret"
 export APP_JWT_EXP_DELTA_MINUTES="60"
 export GOOGLE_OAUTH_CLIENT_ID="your-google-client-id"
 export GOOGLE_OAUTH_CLIENT_SECRET="your-google-client-secret"
+export GCP_PROJECT_ID="your-gcp-project"
+export GCP_LOCATION="europe-north1"
 export GCP_BQ_DATASET="your_dataset_base"
+export GCP_BUCKET_NAME="your-model-artifacts-bucket"
 export ENV="dev"
 ```
 
-Optional but recommended:
+Needed when running model-artifact tooling that reads MLflow metadata:
 
 ```bash
-export GCP_PROJECT_ID="your-gcp-project"
-export GCP_LOCATION="europe-north1"
+export MLFLOW_TRACKING_URI="https://your-mlflow-server"
 ```
 
-### Run API Locally
+### 4. Run API Locally
 
 ```bash
 ./scripts/run_local_terminal.sh
 ```
 
-Or directly:
+Direct command alternative:
 
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8081 --reload
 ```
 
-### Initialize BigQuery Tables
+### 5. Initialize BigQuery Tables (first-time setup)
 
 ```bash
 uv run python scripts/init_gbq_tables.py dev
@@ -117,54 +159,45 @@ Supported environments: `dev`, `stg`, `prod`.
 
 ## Testing
 
-### Run Unit-Focused Suite (default in CI)
+### Unit Tests (DuckDB-backed mock BigQuery client)
 
 ```bash
 uv run pytest -m "not integration"
 ```
 
-If private index auth blocks `uv run` in a local shell, use existing venv:
-
-```bash
-.venv/bin/pytest -m "not integration"
-```
-
-### Run Integration Tests
+### Integration Tests (real BigQuery dev dataset)
 
 ```bash
 uv run pytest -m integration -s
 ```
 
-## API Endpoints (v1)
+Integration tests expect local development tokens in `.env` and refresh them automatically via script calls. You can also generate them manually:
 
-Base prefix: `/app/v1`
+```bash
+uv run python scripts/create_local_dev_tokens.py
+```
 
-- `GET /health/`
-- `POST /auth/google/code`
-- `POST /model/predict` (admin)
-- `GET /model/metadata` (admin)
-- `GET /transactions/labels` (user)
-- `POST /transactions/transform` (user)
-- `POST /transactions/upload` (user)
-- `POST /transactions/register-filetype` (admin)
-- `POST /transactions/delete-filetype` (admin)
-- `POST /assets/upload` (user)
+## Useful Scripts
 
-Interactive docs:
-
-- Swagger: `/docs`
-- ReDoc: `/redoc`
+- `scripts/uv_sync.sh`: sync dependencies from public + private package indexes.
+- `scripts/run_local_terminal.sh`: load env, refresh local tokens, run FastAPI locally.
+- `scripts/run_local_docker.sh`: build and run Docker image locally with ADC credentials.
+- `scripts/init_gbq_tables.py`: bootstrap datasets/tables from `config/bigquery_tables.yaml`.
+- `scripts/create_local_dev_tokens.py`: write local dev JWTs into `.env` for test/auth flows.
 
 ## CI/CD
 
-Single GitHub Actions workflow (`.github/workflows/deploy.yml`):
+Single workflow: `.github/workflows/deploy.yml`
 
-- `main`: run tests + deploy Cloud Run (`prod`)
-- `stg`: run tests + deploy Cloud Run (`stg`)
-- `feature/*`: run tests only
+- `main`: tests + deploy to Cloud Run (`prod`)
+- `stg`: tests + deploy to Cloud Run (`stg`)
+- `feature/*`: tests only
 
-## Documentation Conventions
+## Data Schema Contract
 
-- Python docstrings use NumPy style.
-- Router endpoint docstrings use Markdown sections so Swagger descriptions stay readable.
-- Keep docs aligned with actual code and schema contracts.
+`config/bigquery_tables.yaml` is the canonical table contract used by:
+
+1. `scripts/init_gbq_tables.py` for dataset/table initialization.
+2. `tests/helpers/duckdb_mock_client.py` for schema-consistent mock behavior.
+
+When table structure changes, update the YAML first, then update service logic and tests.

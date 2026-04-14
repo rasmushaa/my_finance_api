@@ -60,11 +60,12 @@ def test_initialization_with_user_client(mock_user_client):
 # Authentication Tests
 def test_successful_authentication_user_role(jwt_service):
     """Test successful authentication for user role."""
-    token = jwt_service.authenticate("user@example.com")
+    token, role = jwt_service.authenticate("user@example.com")
 
     # Verify token is a string
     assert isinstance(token, str)
     assert len(token) > 0
+    assert role == "user"
 
     # Decode and verify token payload
     payload = jwt.decode(
@@ -85,7 +86,7 @@ def test_successful_authentication_user_role(jwt_service):
 
 def test_successful_authentication_admin_role(jwt_service):
     """Test successful authentication for admin role."""
-    token = jwt_service.authenticate("admin@example.com")
+    token, role = jwt_service.authenticate("admin@example.com")
 
     payload = jwt.decode(
         token,
@@ -96,13 +97,13 @@ def test_successful_authentication_admin_role(jwt_service):
     )
 
     assert payload["sub"] == "admin@example.com"
-    assert payload["role"] == "admin"
+    assert payload["role"] == role == "admin"
 
 
 def test_token_expiration_time(jwt_service):
     """Test JWT token has correct expiration time."""
     start_time = int(time.time())
-    token = jwt_service.authenticate("user@example.com")
+    token, _ = jwt_service.authenticate("user@example.com")
 
     payload = jwt.decode(
         token,
