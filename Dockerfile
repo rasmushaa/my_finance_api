@@ -33,7 +33,6 @@ RUN --mount=type=secret,id=oauth_token \
 
 # Now copy the application code and artifacts
 COPY app /app/app/
-COPY model_artifacts /app/model_artifacts/
 
 RUN useradd --create-home --shell /bin/bash appuser \
     && chown -R appuser:appuser /app

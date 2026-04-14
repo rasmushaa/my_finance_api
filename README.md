@@ -131,12 +131,6 @@ export GCP_BUCKET_NAME="your-model-artifacts-bucket"
 export ENV="dev"
 ```
 
-Needed when running model-artifact tooling that reads MLflow metadata:
-
-```bash
-export MLFLOW_TRACKING_URI="https://your-mlflow-server"
-```
-
 ### 4. Run API Locally
 
 ```bash
