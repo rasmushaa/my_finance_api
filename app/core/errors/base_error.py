@@ -1,14 +1,15 @@
-"""This module defines custom base exceptions for the application, which is inherited by
-more specific exceptions in different parts for services.
+"""Base error types and shared error-code enum.
 
-The base exceptions is FastAPI compatible, and raises are automatically handled by
-custom exception handlers defined in ./handlers.py.
+All application-specific exceptions inherit from ``AppError`` and are translated to
+HTTP responses by the global FastAPI exception handler.
 """
 
 from enum import StrEnum
 
 
 class ErrorCode(StrEnum):
+    """Machine-readable error categories returned by API responses."""
+
     # Auth / access
     INVALID_TOKEN = "INVALID_TOKEN"
     EXPIRED_TOKEN = "EXPIRED_TOKEN"
@@ -26,6 +27,8 @@ class ErrorCode(StrEnum):
 
 
 class AppError(Exception):
+    """Base exception type mapped to HTTP responses by global error handler."""
+
     def __init__(
         self,
         status_code: int,

@@ -1,21 +1,39 @@
+"""Dependency injection container and service wiring.
+
+This module centralizes object construction for runtime services and infrastructure
+clients. The container is intentionally lightweight to keep wiring explicit and easy to
+test.
+"""
+
 from typing import Any, Callable, Protocol
 
 from app.core.database_client import GoogleCloudAPI
-from app.core.settings import BigQueryConfig, GoogleOAuthConfig, JWTConfig
+from app.core.settings import (
+    BigQueryConfig,
+    GoogleOAuthConfig,
+    JWTConfig,
+    ModelArtifactoryConfig,
+)
 from app.services.assets import AssetService
+from app.services.file_types import FileTypesService
 from app.services.google_oauth import GoogleOAuthService
 from app.services.jwt import AppJwtService
 from app.services.model import ModelService
+from app.services.reporting import ReportingService
 from app.services.transactions import TransactionService
 from app.services.users import UsersService
 
 
 # ------------------- Protocols for Type Hinting ------------------
 class StartupService(Protocol):
+    """Protocol for services that require startup loading."""
+
     def load(self) -> None: ...
 
 
 class ShutdownService(Protocol):
+    """Protocol for services that require shutdown cleanup."""
+
     def cleanup(self) -> None: ...
 
 
@@ -89,9 +107,16 @@ def create_service_provider(service_class, **dependencies):
     **dependencies : dict
         Mapping of parameter names to container dependency names.
         Example: create_service_provider(MyService, db_client="cloud_client", model="model_store")
+
+    Returns
+    -------
+    Callable[[], Any]
+        Provider function that resolves dependencies lazily from container and
+        instantiates ``service_class``.
     """
 
     def provider():
+        """Construct service class by resolving named container dependencies."""
         resolved_deps = {
             param: container.resolve(dep_name)
             for param, dep_name in dependencies.items()
@@ -102,7 +127,11 @@ def create_service_provider(service_class, **dependencies):
 
 
 def setup_container():
-    """Set up the dependency injection container with all services and clients."""
+    """Register all runtime providers in the global container.
+
+    The setup is intentionally explicit to keep startup behavior easy to audit and to
+    simplify test-time overrides.
+    """
 
     # Typed settings
     container.register("gcp_config", lambda: BigQueryConfig.from_env(), singleton=True)
@@ -110,6 +139,11 @@ def setup_container():
     container.register(
         "google_oauth_config",
         lambda: GoogleOAuthConfig.from_env(),
+        singleton=True,
+    )
+    container.register(
+        "model_artifactory_config",
+        lambda: ModelArtifactoryConfig.from_env(),
         singleton=True,
     )
 
@@ -148,15 +182,25 @@ def setup_container():
     )
 
     # Model service - singleton
-    container.register("model_store", lambda: ModelService(), singleton=True)
+    container.register(
+        "model_store",
+        create_service_provider(ModelService, db_client="cloud_client"),
+        singleton=True,
+    )
 
-    # Transaction service - depends on cloud_client and model_store
+    # File types service
+    container.register(
+        "file_types_service",
+        create_service_provider(FileTypesService, db_client="cloud_client"),
+    )
+
+    # Transaction service
     container.register(
         "transaction_service",
         create_service_provider(
             TransactionService,
             db_client="cloud_client",
-            model_service="model_store",
+            file_types_service="file_types_service",
         ),
         singleton=True,
     )
@@ -165,6 +209,12 @@ def setup_container():
     container.register(
         "asset_service",
         create_service_provider(AssetService, db_client="cloud_client"),
+    )
+
+    # Reporting service
+    container.register(
+        "reporting_service",
+        create_service_provider(ReportingService, db_client="cloud_client"),
     )
 
 
@@ -178,8 +228,10 @@ def get_services_requiring_startup() -> list[StartupService]:
     These are intended to be called in FastAPI's startup event
     to ensure they are ready before handling requests.
 
-    Returns: List[StartupService]
-        List of services having a `load()` method that should be called on startup.
+    Returns
+    -------
+    list[StartupService]
+        Services that should be preloaded before handling requests.
     """
     model_store = container.resolve("model_store")
     return [model_store]
@@ -188,7 +240,9 @@ def get_services_requiring_startup() -> list[StartupService]:
 def get_services_requiring_shutdown() -> list[ShutdownService]:
     """Get services that need cleanup on shutdown.
 
-    Returns: List[ShutdownService]
-        List of service instances that need cleanup.
+    Returns
+    -------
+    list[ShutdownService]
+        Services that should be cleaned up during shutdown.
     """
     return []

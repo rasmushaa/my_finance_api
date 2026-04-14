@@ -1,3 +1,5 @@
+"""Application logging configuration helpers."""
+
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -9,19 +11,18 @@ def setup_logging(
     keep_last: int = 5,
     suppress_external: bool = True,
 ):
-    """Define a logging configuration that logs to both console and file with a detailed
-    format.
+    """Configure root logging for both console and rotating file output.
 
     Parameters
     ----------
     level : int, optional
-        Logging level (e.g., logging.DEBUG, logging.INFO), by default logging.DEBUG
+        Root logger level (for example ``logging.DEBUG`` or ``logging.INFO``).
     log_dir : str, optional
-        Directory where log files will be stored, by default "logs"
+        Directory where timestamped log files are written.
     keep_last : int, optional
-        Number of recent log files to keep, by default 5
+        Number of most recent log files to retain.
     suppress_external : bool, optional
-        Whether to suppress verbose logging from external libraries, by default True
+        Whether to reduce verbosity for noisy third-party libraries.
     """
 
     # Ensure log directory exists and create a timestamped log file

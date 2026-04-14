@@ -1,3 +1,8 @@
+"""Application entrypoint and FastAPI app factory.
+
+This module wires lifecycle hooks, router registration, and global exception handling.
+"""
+
 import logging
 from contextlib import asynccontextmanager
 
@@ -16,28 +21,42 @@ logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
-    """Application factory to build FastAPI app with lifecycle hooks."""
+    """Build and configure the FastAPI application instance.
+
+    The factory configures:
+    - logging setup
+    - startup lifecycle loading of services that expose ``load()``
+    - shutdown lifecycle cleanup for services that expose ``cleanup()``
+    - v1 router registration
+    - global ``AppError`` exception handling
+
+    Returns
+    -------
+    FastAPI
+        Fully configured FastAPI application.
+    """
     setup_logging(level=logging.INFO)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        """Application lifecycle context manager."""
         logger.info("Starting up application...")
 
-        # Get services that need startup tasks from container
+        # Resolve startup-capable services from container.
         startup_services = get_services_requiring_startup()
 
-        # Run startup tasks
-        # Note: this used to be async thredads, but Cloud Run (with request based billing) does not process background threads.
-        # The Cloud Run has 4min maximum startup time, so all startup tasks must be completed within that time frame.
+        # Run startup tasks synchronously.
+        # Cloud Run request-based billing does not guarantee background thread progress
+        # while idle, so loading is done during startup to make model availability explicit.
         for service in startup_services:
-            if hasattr(service, "load"):  # Protocol check for load method
+            if hasattr(service, "load"):
                 logger.info(f"Loading {service.__class__.__name__}")
                 service.load()
 
         try:
             yield
         finally:
-            # Cleanup on shutdown
+            # Run shutdown cleanup hooks when present.
             logger.info("Shutting down application...")
             shutdown_services = get_services_requiring_shutdown()
             for shutdown_service in shutdown_services:

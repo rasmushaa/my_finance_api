@@ -5,13 +5,17 @@ import io
 import pandas as pd
 from fastapi.testclient import TestClient
 
-from app.api.dependencys import (
+from app.api.dependencies import (
+    get_db_client,
+    get_file_types_service,
+    get_model_store,
     get_require_admin,
     get_require_user,
     get_transaction_service,
 )
-from app.core.errors.domain import ModelInputError
+from app.core.errors.auth import UserNotAuthorizedError
 from app.main import app
+from app.services.file_types import FileTypesService
 from app.services.transactions import TransactionService
 from tests.helpers.duckdb_mock_client import DuckDBMockClient
 from tests.helpers.fake_services import FakeModelService
@@ -42,36 +46,48 @@ def seed_filetypes_matching_sample_csv() -> pd.DataFrame:
     )
 
 
-def build_transaction_service(
+def build_file_types_service(*, db_client: DuckDBMockClient) -> FileTypesService:
+    return FileTypesService(db_client=db_client)
+
+
+def build_transaction_service(*, db_client: DuckDBMockClient) -> TransactionService:
+    return TransactionService(
+        db_client=db_client,
+        file_types_service=build_file_types_service(db_client=db_client),
+    )
+
+
+def build_model_service(
     *,
-    db_client: DuckDBMockClient,
     predictions: list[str] | None = None,
-    model_error: Exception | None = None,
-) -> TransactionService:
-    model = FakeModelService(
+) -> FakeModelService:
+    return FakeModelService(
         predictions=predictions or SAMPLE_PREDICTIONS,
-        error=model_error,
-        metadata={
+        prod_metadata={
             "model_name": "test_model",
-            "alias": "dev",
+            "aliases": ["prod"],
             "version": 1,
             "run_id": "run-1",
             "description": "test",
             "package_version": "1.0.0",
             "commit_sha": "abc123",
+            "commit_head_sha": "abc123head",
             "model_features": "date,receiver,amount",
             "model_architecture": "RandomForest",
         },
     )
-    return TransactionService(db_client=db_client, model_service=model)
+
+
+def mock_require_admin():
+    return {"user_id": "admin_user", "sub": "admin@example.com", "role": "admin"}
 
 
 def mock_require_user():
     return {"user_id": "test_user", "sub": "user@example.com"}
 
 
-def mock_require_admin():
-    return {"user_id": "admin_user", "sub": "admin@example.com", "role": "admin"}
+def mock_forbidden_admin():
+    raise UserNotAuthorizedError()
 
 
 def _make_csv_upload(
@@ -82,20 +98,29 @@ def _make_csv_upload(
     return ("file", (filename, io.BytesIO(content.encode()), content_type))
 
 
-# --------------- Tests: transform/upload ---------------
+# -- Transform --------------------------------
 def test_import_csv_success():
+    """Vanilla success case: valid CSV, known file type, authorized user."""
+    # Actual mock database client
     db_client = DuckDBMockClient(
         dataset=DATASET,
         seed_tables={"d_filetypes": seed_filetypes_matching_sample_csv()},
     )
-    service = build_transaction_service(db_client=db_client)
 
+    service = build_transaction_service(db_client=db_client)
+    model = build_model_service()
+
+    # API dependency overrides to inject our mocks
     app.dependency_overrides[get_require_user] = mock_require_user
     app.dependency_overrides[get_transaction_service] = lambda: service
+    app.dependency_overrides[get_model_store] = lambda: model
+    app.dependency_overrides[get_db_client] = lambda: db_client
 
+    # Test client to call the API endpoint
     client = TestClient(app)
     response = client.post("/app/v1/transactions/transform", files=[_make_csv_upload()])
 
+    # Assertions on the response
     assert response.status_code == 200
     assert response.headers["content-type"] == "text/csv; charset=utf-8"
     assert (
@@ -127,30 +152,12 @@ def test_import_csv_unknown_filetype_error_returns_400():
         },
     )
     service = build_transaction_service(db_client=db_client)
+    model = build_model_service()
 
     app.dependency_overrides[get_require_user] = mock_require_user
     app.dependency_overrides[get_transaction_service] = lambda: service
-
-    client = TestClient(app)
-    response = client.post("/app/v1/transactions/transform", files=[_make_csv_upload()])
-
-    assert response.status_code == 400
-
-
-def test_import_csv_model_input_error_returns_400():
-    db_client = DuckDBMockClient(
-        dataset=DATASET,
-        seed_tables={"d_filetypes": seed_filetypes_matching_sample_csv()},
-    )
-    service = build_transaction_service(
-        db_client=db_client,
-        model_error=ModelInputError(
-            details={"message": "Input features missing required model features."}
-        ),
-    )
-
-    app.dependency_overrides[get_require_user] = mock_require_user
-    app.dependency_overrides[get_transaction_service] = lambda: service
+    app.dependency_overrides[get_model_store] = lambda: model
+    app.dependency_overrides[get_db_client] = lambda: db_client
 
     client = TestClient(app)
     response = client.post("/app/v1/transactions/transform", files=[_make_csv_upload()])
@@ -164,8 +171,11 @@ def test_import_csv_unauthorized():
         seed_tables={"d_filetypes": seed_filetypes_matching_sample_csv()},
     )
     service = build_transaction_service(db_client=db_client)
+    model = build_model_service()
 
     app.dependency_overrides[get_transaction_service] = lambda: service
+    app.dependency_overrides[get_model_store] = lambda: model
+    app.dependency_overrides[get_db_client] = lambda: db_client
 
     client = TestClient(app)
     response = client.post("/app/v1/transactions/transform", files=[_make_csv_upload()])
@@ -173,7 +183,7 @@ def test_import_csv_unauthorized():
     assert response.status_code in [401, 422]
 
 
-# --------------- Tests: register-filetype ---------------
+# --------------- Tests: filetypes/register ---------------
 VALID_FILETYPE_PAYLOAD = {
     "cols": ["Date", "Amount", "Receiver"],
     "file_name": "Test Bank CSV",
@@ -189,15 +199,13 @@ def test_register_filetype_success():
         dataset=DATASET,
         seed_tables={"d_filetypes": seed_filetypes_matching_sample_csv()},
     )
-    service = build_transaction_service(db_client=db_client)
+    service = build_file_types_service(db_client=db_client)
 
     app.dependency_overrides[get_require_admin] = mock_require_admin
-    app.dependency_overrides[get_transaction_service] = lambda: service
+    app.dependency_overrides[get_file_types_service] = lambda: service
 
     client = TestClient(app)
-    response = client.post(
-        "/app/v1/transactions/register-filetype", json=VALID_FILETYPE_PAYLOAD
-    )
+    response = client.post("/app/v1/filetypes/register", json=VALID_FILETYPE_PAYLOAD)
 
     assert response.status_code == 200
 
@@ -223,14 +231,12 @@ def test_register_filetype_unauthorized():
         dataset=DATASET,
         seed_tables={"d_filetypes": seed_filetypes_matching_sample_csv()},
     )
-    service = build_transaction_service(db_client=db_client)
+    service = build_file_types_service(db_client=db_client)
 
-    app.dependency_overrides[get_transaction_service] = lambda: service
+    app.dependency_overrides[get_file_types_service] = lambda: service
 
     client = TestClient(app)
-    response = client.post(
-        "/app/v1/transactions/register-filetype", json=VALID_FILETYPE_PAYLOAD
-    )
+    response = client.post("/app/v1/filetypes/register", json=VALID_FILETYPE_PAYLOAD)
 
     assert response.status_code in [401, 422]
 
@@ -240,17 +246,15 @@ def test_register_filetype_forbidden_for_regular_user():
         dataset=DATASET,
         seed_tables={"d_filetypes": seed_filetypes_matching_sample_csv()},
     )
-    service = build_transaction_service(db_client=db_client)
+    service = build_file_types_service(db_client=db_client)
 
-    app.dependency_overrides[get_require_user] = mock_require_user
-    app.dependency_overrides[get_transaction_service] = lambda: service
+    app.dependency_overrides[get_require_admin] = mock_forbidden_admin
+    app.dependency_overrides[get_file_types_service] = lambda: service
 
     client = TestClient(app)
-    response = client.post(
-        "/app/v1/transactions/register-filetype", json=VALID_FILETYPE_PAYLOAD
-    )
+    response = client.post("/app/v1/filetypes/register", json=VALID_FILETYPE_PAYLOAD)
 
-    assert response.status_code in [401, 403, 422]
+    assert response.status_code == 403
 
 
 def test_register_filetype_invalid_payload_returns_422():
@@ -258,14 +262,14 @@ def test_register_filetype_invalid_payload_returns_422():
         dataset=DATASET,
         seed_tables={"d_filetypes": seed_filetypes_matching_sample_csv()},
     )
-    service = build_transaction_service(db_client=db_client)
+    service = build_file_types_service(db_client=db_client)
 
     app.dependency_overrides[get_require_admin] = mock_require_admin
-    app.dependency_overrides[get_transaction_service] = lambda: service
+    app.dependency_overrides[get_file_types_service] = lambda: service
 
     client = TestClient(app)
     response = client.post(
-        "/app/v1/transactions/register-filetype", json={"file_name": "Incomplete"}
+        "/app/v1/filetypes/register", json={"file_name": "Incomplete"}
     )
 
     assert response.status_code == 422

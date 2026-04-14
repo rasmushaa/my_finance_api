@@ -1,10 +1,22 @@
+"""Google Cloud data-access client.
+
+This module wraps BigQuery and GCS operations used by service-layer components. It
+provides:
+- SQL execution for DML/DDL
+- SQL-to-DataFrame reads
+- DataFrame append writes
+- model artifact and manifest reads from Cloud Storage
+"""
+
 import hashlib
 import logging
+from datetime import date, datetime, time
+from typing import Any, Mapping
 
 import pandas as pd
 import pandas_gbq
 from google.api_core.exceptions import GoogleAPICallError
-from google.cloud import bigquery
+from google.cloud import bigquery, storage
 from google.cloud.exceptions import Forbidden, NotFound
 
 from app.core.errors.infra import DatabaseInternalError
@@ -17,9 +29,8 @@ class GoogleCloudAPI:
     """A singleton wrapper class for Google Cloud APIs, including BigQuery and Cloud
     Storage.
 
-    The class contains all information about the project,
-    such as project id, dataset, location, bucket name and directory,
-    which are loaded from environment variables.
+    The client keeps runtime-scoped project settings (project, dataset, location,
+    bucket), loaded from ``BigQueryConfig``.
 
     Details
     -------
@@ -32,6 +43,7 @@ class GoogleCloudAPI:
         self.__project_id = gcp_config.project_id
         self.__dataset = gcp_config.dataset
         self.__location = gcp_config.location
+        self.__bucket_name = gcp_config.bucket_name
 
     @property
     def dataset(self) -> str:
@@ -47,14 +59,58 @@ class GoogleCloudAPI:
         """
         return self.__dataset
 
-    def execute_sql(self, sql: str) -> int:
+    @staticmethod
+    def __infer_bq_param_type(value: Any) -> str:
+        """Infer BigQuery scalar parameter type from a Python value."""
+        if isinstance(value, bool):
+            return "BOOL"
+        if isinstance(value, int):
+            return "INT64"
+        if isinstance(value, float):
+            return "FLOAT64"
+        if isinstance(value, datetime):
+            return "TIMESTAMP"
+        if isinstance(value, date):
+            return "DATE"
+        if isinstance(value, time):
+            return "TIME"
+        return "STRING"
+
+    def __build_query_job_config(
+        self, params: Mapping[str, Any] | None
+    ) -> bigquery.QueryJobConfig | None:
+        """Build BigQuery QueryJobConfig for named scalar parameters.
+
+        Parameters
+        ----------
+        params : Mapping[str, Any] | None
+            Named parameter mapping for ``@param`` placeholders in SQL.
+
+        Returns
+        -------
+        bigquery.QueryJobConfig | None
+            Query config with typed scalar parameters, or ``None`` when empty.
+        """
+        if not params:
+            return None
+
+        query_params: list[bigquery.ScalarQueryParameter] = []
+        for key, value in params.items():
+            param_type = self.__infer_bq_param_type(value)
+            query_params.append(bigquery.ScalarQueryParameter(key, param_type, value))
+
+        return bigquery.QueryJobConfig(query_parameters=query_params)
+
+    def execute_sql(self, sql: str, params: Mapping[str, Any] | None = None) -> int:
         """Run a regular SQL query without returning results, used for DDL and DML
         operations.
 
-        Inputs
-        ------
-        sql : string
-            A regular SQL query
+        Parameters
+        ----------
+        sql : str
+            SQL query string.
+        params : Mapping[str, Any] | None
+            Optional named query parameters used with `@param` placeholders.
 
         Returns
         -------
@@ -75,7 +131,8 @@ class GoogleCloudAPI:
             client = bigquery.Client(
                 project=self.__project_id, location=self.__location
             )
-            job = client.query(sql)
+            job_config = self.__build_query_job_config(params)
+            job = client.query(sql, job_config=job_config)
             job.result()  # Wait for completion
 
             logger.debug(
@@ -95,17 +152,22 @@ class GoogleCloudAPI:
             logger.error(f"BigQuery API error: {str(e)}")
             raise DatabaseInternalError(details={"error": str(e)})
 
-    def sql_to_pandas(self, sql: str) -> pd.DataFrame:
-        """Run a regular SQL query and return a pandas DataFrame.
+    def sql_to_pandas(
+        self, sql: str, params: Mapping[str, Any] | None = None
+    ) -> pd.DataFrame:
+        """Run SQL and return the result as a pandas DataFrame.
 
-        Inputs
-        ------
-        sql : string
-            A regular SQL query
+        Parameters
+        ----------
+        sql : str
+            SQL query string.
+        params : Mapping[str, Any] | None
+            Optional named query parameters used with `@param` placeholders.
 
         Returns
         -------
-        df : DataFrame
+        pd.DataFrame
+            Query results.
 
         Raises
         ------
@@ -118,12 +180,12 @@ class GoogleCloudAPI:
         """
         logger.debug(f"Running SQL query:\n{sql}")
         try:
-            df = pandas_gbq.read_gbq(
-                sql,
-                project_id=self.__project_id,
-                location=self.__location,
-                progress_bar_type=None,
-            )  # Use the system default credentials/Cloud Run SA
+            client = bigquery.Client(
+                project=self.__project_id, location=self.__location
+            )
+            job_config = self.__build_query_job_config(params)
+            query_job = client.query(sql, job_config=job_config)
+            df = query_job.to_dataframe(create_bqstorage_client=False)
             logger.debug(f"Query result:\n{df}")
             return df
 
@@ -145,37 +207,80 @@ class GoogleCloudAPI:
         The table must already exist, and the schema must match the DataFrame.
         This method is used for appending new rows to existing tables.
 
-        Inputs
-        ------
+        Parameters
+        ----------
         df : pd.DataFrame
-            A regular DataFrame
+            DataFrame to append.
         table_name : str
-            The name of destination table in BigQuery, without dataset prefix
+            Destination table name without dataset prefix.
         """
 
         self.__write_pandas_to_table(df, table_name, if_exists="append")
 
+    def download_to_filename(self, blob_path: str, destination_file: str):
+        """Download a single object from GCS to a local file path.
+
+        Parameters
+        ----------
+        blob_path : str
+            Object path in GCS (for example ``"model/manifest.json"``).
+        destination_file : str
+            Local destination file path.
+        """
+        # TODO: Consider refactoring to a separate GCS client class if it grows too large or complex,
+        try:
+            client = storage.Client(project=self.__project_id)
+            blob = client.bucket(self.__bucket_name).blob(blob_path)
+            blob.download_to_filename(destination_file)
+            logger.debug(f"Downloaded '{blob_path}' from GCS to '{destination_file}'")
+
+        except Exception as e:
+            logger.error(f"Error downloading file from GCS: {str(e)}")
+            raise DatabaseInternalError(
+                message="Error downloading file from GCS", details={"error": str(e)}
+            )
+
+    def list_blobs(self, prefix: str) -> list[str]:
+        """List object paths in GCS under a prefix.
+
+        Parameters
+        ----------
+        prefix : str
+            GCS prefix to list (for example ``"model/prod/1/"``).
+
+        Returns
+        -------
+        list[str]
+            Object paths matching the prefix.
+        """
+        try:
+            client = storage.Client(project=self.__project_id)
+            blobs = client.bucket(self.__bucket_name).list_blobs(prefix=prefix)
+            return [blob.name for blob in blobs]
+        except Exception as e:
+            logger.error(f"Error listing blobs from GCS: {str(e)}")
+            raise DatabaseInternalError(
+                message="Error listing blobs from GCS", details={"error": str(e)}
+            )
+
     def __write_pandas_to_table(
         self, df: pd.DataFrame, table_name: str, if_exists: str
     ):
-        """Push a DataFrame to BigQuery.
+        """Write a DataFrame to BigQuery via ``pandas_gbq``.
 
-        Basic metadata columns are added to the DataFrame for traceability and auditing purposes,
+        Metadata columns are appended before upload for auditability.
+        Schema is inferred from DataFrame dtypes and passed explicitly to avoid pyarrow
+        edge cases with date/datetime columns.
 
-        A new table will be create, if the destination does not exists,
-        however, pyarrows has a bug and it fails for datetime columns,
-        thus the schema must be constructed manually from pandas to GBQ format.
-        The mode is locked to Append only, to prevent accidental overwrites
-
-        Inputs
-        ------
+        Parameters
+        ----------
         df : pd.DataFrame
-            A regular DataFrame
+            DataFrame to write.
         table_name : str
-            The name of destination table in BigQuery, without dataset prefix
+            Destination table name without dataset prefix.
         if_exists : str
-            Behavior when the destination table already exists. Default is "append".
-            Allowed values are "fail", "replace", "append".
+            Behavior when destination table exists (``"fail"``, ``"replace"``,
+            ``"append"``).
         """
         table_schema = []  # [{'name': 'col1', 'type': 'STRING'},...]
         for i, col in enumerate(df.columns):
@@ -204,24 +309,24 @@ class GoogleCloudAPI:
         )
 
     def __add_row_metadata(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Add metadata columns for table operations.
+        """Add row-level metadata columns used in warehouse tables.
 
         Details
         -------
-        - _RowStatus: 'i' for inserted, 'u' for updated, 'd' for deleted. This allows for soft deletes and tracking changes over time.
-        - _RowCreatedAt: Timestamp of when the row was created.
-        - _RowUpdatedAt: Timestamp of when the row was last updated.
-        - _RowUploadHash: A hash of the original row data (including metadata columns), used for change detection and auditing.
+        - ``_RowStatus``: ``"i"`` for inserted rows.
+        - ``_RowCreatedAt``: UTC creation timestamp.
+        - ``_RowUpdatedAt``: UTC last-update timestamp.
+        - ``_RowUploadHash``: stable 64-bit hash for traceability.
 
         Parameters
         ----------
         df : pd.DataFrame
-            A regular DataFrame
+            Input DataFrame.
 
         Returns
         -------
         df : pd.DataFrame
-            The input DataFrame with added metadata columns
+            Copy of input DataFrame with metadata columns added.
         """
         df = df.copy()
         df["_RowStatus"] = "i"
@@ -231,7 +336,8 @@ class GoogleCloudAPI:
         df["_RowUploadHash"] = df.apply(
             lambda row: int.from_bytes(
                 hashlib.sha256(str(tuple(row)).encode()).digest()[:8], "big"
-            ),
+            )
+            & 0x7FFFFFFFFFFFFFFF,
             axis=1,
         )
         return df

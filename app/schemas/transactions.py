@@ -1,4 +1,4 @@
-from typing import Dict
+"""Transaction-related API schemas."""
 
 from pydantic import BaseModel, Field
 
@@ -9,8 +9,11 @@ class CSVImportRequest(BaseModel):
     The file itself is provided as multipart form data (`UploadFile`).
     This model documents the expected content type constraint for client validation.
 
-    ## Attributes
-    - **content_type** (str): Must be `text/csv` or `application/csv`.
+    Attributes
+    ----------
+    content_type : str
+        MIME type of the uploaded file. Must be ``"text/csv"`` or
+        ``"application/csv"``.
     """
 
     content_type: str = Field(
@@ -27,10 +30,14 @@ class CSVImportResponse(BaseModel):
     describes what clients can expect in the response headers and the
     structure of the processed data.
 
-    ## Attributes
-    - **filename** (str): The name of the output file (prefixed with `processed_`).
-    - **row_count** (int): Number of data rows in the processed file.
-    - **columns** (list[str]): Column names present in the processed file.
+    Attributes
+    ----------
+    filename : str
+        Output filename of the processed CSV, prefixed with ``"processed_"``.
+    row_count : int
+        Number of data rows in the processed CSV.
+    columns : list[str]
+        Ordered list of output column names in the processed CSV payload.
     """
 
     filename: str = Field(
@@ -50,83 +57,43 @@ class CSVImportResponse(BaseModel):
     )
 
 
-class FileTypeAppendRequest(BaseModel):
-    """Request model for registering a new file type in the database.
+class TransactionLabels(BaseModel):
+    """Single transaction label entry used by label-listing responses.
 
-    This model captures the necessary information about the file schema and
-    formatting details required to process files of this new type.
-
-    ## Attributes
-    - **cols** (list[str]): Column names of the file, used to generate a unique file type ID.
-    - **file_name** (str): A human-readable name for the file type (e.g., "Nordea CSV").
-    - **date_col** (str): The name of the date column in the file.
-    - **date_col_format** (str): The date format used in the date column (e.g., "%Y-%m-%d").
-    - **amount_col** (str): The name of the amount column in the file.
-    - **receiver_col** (str): The name of the receiver/payee column in the file.
+    Attributes
+    ----------
+    key : str
+        Canonical category key used by reporting and model outputs.
+    description : str
+        Human-readable explanation of what transactions belong to the category.
     """
 
-    cols: list[str] = Field(
+    key: str = Field(
         ...,
-        description="Column names of the file, used to generate a unique file type ID.",
-        examples=[["Date", "Amount", "Receiver"]],
+        description="The assigned category label for the transaction.",
+        examples=["Groceries", "Utilities", "Entertainment"],
     )
-    file_name: str = Field(
+    description: str = Field(
         ...,
-        description="A human-readable name for the file type (e.g., 'Nordea CSV').",
-        examples=["Nordea CSV"],
-    )
-    date_col: str = Field(
-        ...,
-        description="The name of the date column in the file.",
-        examples=["Date"],
-    )
-    date_col_format: str = Field(
-        ...,
-        description="The date format used in the date column (e.g., '%Y-%m-%d').",
-        examples=["%Y-%m-%d"],
-    )
-    amount_col: str = Field(
-        ...,
-        description="The name of the amount column in the file.",
-        examples=["Amount"],
-    )
-    receiver_col: str = Field(
-        ...,
-        description="The name of the receiver/payee column in the file.",
-        examples=["Receiver"],
-    )
-
-
-class TransactionLabelResponse(BaseModel):
-    """Response model for transaction labeling results.
-
-    This model captures the essential information about a transaction and its
-    assigned category label after processing.
-
-    ## Attributes
-    - **labels** (Dict[str, str]): A mapping of transaction labels (keys) to their descriptions (values).
-    """
-
-    labels: Dict[str, str] = Field(
-        ...,
-        description="A mapping of transaction labels (keys) to their descriptions (values).",
+        description="A brief description of the assigned category label.",
         examples=[
-            {"Groceries": "All food stuff", "Utilities": "Monthly utility bills"}
+            "All food-related expenses",
+            "Monthly utility bills",
+            "Leisure and entertainment expenses",
         ],
     )
 
 
-class FileTypeDeleteRequest(BaseModel):
-    """Request model for deleting an existing file type from the database.
+class TransactionLabelResponse(BaseModel):
+    """Response model for transaction label listing endpoint.
 
-    This model captures the unique identifier of the file type to be deleted.
-
-    ## Attributes
-    - **file_name** (str): The human-readable name of the file type to delete (e.g., "Nordea CSV").
+    Attributes
+    ----------
+    labels : list[TransactionLabels]
+        List of available transaction labels with user-facing descriptions.
     """
 
-    file_name: str = Field(
+    labels: list[TransactionLabels] = Field(
         ...,
-        description="The human-readable name of the file type to delete (e.g., 'Nordea CSV').",
-        examples=["Nordea CSV"],
+        description="List of transaction labels with their descriptions.",
     )

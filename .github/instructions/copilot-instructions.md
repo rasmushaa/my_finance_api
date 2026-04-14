@@ -45,5 +45,5 @@ Primary goals:
 - `config/bigquery_tables.yaml`
 - `app/core/container.py`
 - `app/core/settings.py`
-- `app/api/dependencys.py`
+- `app/api/dependencies.py`
 - `tests/helpers/duckdb_mock_client.py`

@@ -54,6 +54,7 @@ def test_bigquery_config_builds_dataset_suffix(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("GCP_PROJECT_ID", "my-project")
     monkeypatch.setenv("GCP_BQ_DATASET", "my_dataset")
     monkeypatch.setenv("GCP_LOCATION", "europe-north1")
+    monkeypatch.setenv("GCP_BUCKET_NAME", "my-model-bucket")
     monkeypatch.setenv("ENV", "stg")
 
     config = BigQueryConfig.from_env()
@@ -63,7 +64,10 @@ def test_bigquery_config_builds_dataset_suffix(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_bigquery_config_defaults_env_to_dev(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("GCP_PROJECT_ID", "my-project")
     monkeypatch.setenv("GCP_BQ_DATASET", "my_dataset")
+    monkeypatch.setenv("GCP_LOCATION", "europe-north1")
+    monkeypatch.setenv("GCP_BUCKET_NAME", "my-model-bucket")
     monkeypatch.delenv("ENV", raising=False)
 
     config = BigQueryConfig.from_env()

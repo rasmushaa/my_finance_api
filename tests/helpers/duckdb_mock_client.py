@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from datetime import date, datetime, time
 from typing import Mapping
 from unittest.mock import Mock
 
@@ -17,9 +18,9 @@ class DuckDBMockClient:
     """A lightweight db_client replacement backed by in-memory DuckDB.
 
     Exposes the same methods used by services:
-    - `sql_to_pandas(sql)`
+    - `sql_to_pandas(sql, params=None)`
     - `append_pandas_to_table(df, table_name)`
-    - `execute_sql(sql)`
+    - `execute_sql(sql, params=None)`
 
     Each callable is wrapped with `unittest.mock.Mock` so tests can assert calls.
     """
@@ -50,6 +51,33 @@ class DuckDBMockClient:
             "CURRENT_TIMESTAMP()", "current_localtimestamp()"
         )
         return normalized.replace("CURRENT_TIMESTAMP", "current_localtimestamp()")
+
+    @staticmethod
+    def _sql_literal(value: object) -> str:
+        if value is None:
+            return "NULL"
+        if isinstance(value, bool):
+            return "TRUE" if value else "FALSE"
+        if isinstance(value, (int, float)):
+            return str(value)
+        if isinstance(value, pd.Timestamp):
+            text = value.isoformat()
+        elif isinstance(value, (datetime, date, time)):
+            text = value.isoformat()
+        else:
+            text = str(value)
+        return "'" + text.replace("'", "''") + "'"
+
+    @classmethod
+    def _apply_params(cls, sql: str, params: Mapping[str, object] | None = None) -> str:
+        if not params:
+            return sql
+
+        rendered = sql
+        for key, value in params.items():
+            pattern = re.compile(rf"@{re.escape(key)}\b")
+            rendered = pattern.sub(cls._sql_literal(value), rendered)
+        return rendered
 
     def _table_exists(self, table_name: str) -> bool:
         count = self._conn.execute(
@@ -101,8 +129,11 @@ class DuckDBMockClient:
             f"CREATE TABLE {self.dataset}.{table_name} AS SELECT * FROM _seed_df"
         )
 
-    def _sql_to_pandas_impl(self, sql: str) -> pd.DataFrame:
-        return self._conn.execute(self._normalize_sql(sql)).df()
+    def _sql_to_pandas_impl(
+        self, sql: str, params: Mapping[str, object] | None = None
+    ) -> pd.DataFrame:
+        query = self._apply_params(self._normalize_sql(sql), params=params)
+        return self._conn.execute(query).df()
 
     def _append_pandas_to_table_impl(self, df: pd.DataFrame, table_name: str) -> None:
         frame = df.copy()
@@ -143,9 +174,11 @@ class DuckDBMockClient:
                 f"CREATE TABLE {self.dataset}.{table_name} AS SELECT * FROM _insert_df"
             )
 
-    def _execute_sql_impl(self, sql: str) -> int:
+    def _execute_sql_impl(
+        self, sql: str, params: Mapping[str, object] | None = None
+    ) -> int:
         """Execute SQL and return affected rows for basic UPDATE/DELETE statements."""
-        query = self._normalize_sql(sql)
+        query = self._apply_params(self._normalize_sql(sql), params=params)
 
         update_match = re.match(
             r"(?is)^UPDATE\s+([^\s]+)\s+SET\s+.+?\s+WHERE\s+(.+?);?$",

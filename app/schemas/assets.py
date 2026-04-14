@@ -1,10 +1,35 @@
+"""Asset snapshot API schemas."""
+
 from pydantic import BaseModel, Field
 
 
-class AssetUploadRequest(BaseModel):
-    """Request model for uploading asset data fields to the database.
+class AssetEntryRequest(BaseModel):
+    """Asset snapshot payload used for upload and latest-entry responses.
 
-    This model captures the necessary information about the asset data being uploaded.
+    Attributes
+    ----------
+    cash : float
+        Sum of liquid cash assets, for example account balances.
+    other_assets : float
+        Other tangible assets, for example vehicles or valuables.
+    apartment : float
+        Market value of owned primary apartment/house.
+    capital_assets_value : float
+        Market value of invested capital assets.
+    capital_assets_unrealized_gains : float
+        Unrealized gains included in capital asset valuation.
+    mortgage : float
+        Mortgage liability (non-positive value).
+    student_loan : float
+        Student loan liability (non-positive value).
+    other_liabilities : float
+        Other liabilities such as credit card debt (non-positive value).
+    realized_capital_gains : float
+        Realized gains for the reporting period.
+    realized_capital_losses : float
+        Realized losses for the reporting period (non-positive value).
+    date : str
+        Snapshot date in ``YYYY-MM-DD`` format.
     """
 
     cash: float = Field(

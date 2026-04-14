@@ -1,11 +1,15 @@
+"""Domain-level exceptions for validation, query, and model workflows."""
+
 from .base_error import AppError, ErrorCode
 
 
 # -- IO errors -------------------------------------------
 class UnknownFileTypeError(AppError):
+    """Raised when uploaded CSV schema is not registered in file-type table."""
+
     def __init__(
         self,
-        message: str = "Not able to process the file. The file type is not recognized.",
+        message: str = "Unable to process file: schema is not recognized.",
         details: dict = {},
     ):
         super().__init__(
@@ -40,6 +44,8 @@ class DatabaseQueryError(AppError):
 
 # -- ML model errors -------------------------------------------
 class ModelArtifactsError(AppError):
+    """Raised when model artifact retrieval or validation fails."""
+
     def __init__(
         self,
         message: str = "Model artifacts are missing or invalid.",
@@ -54,6 +60,8 @@ class ModelArtifactsError(AppError):
 
 
 class ModelInputError(AppError):
+    """Raised when runtime input features do not match model requirements."""
+
     def __init__(
         self, message: str = "Invalid input features provided.", details: dict = {}
     ):

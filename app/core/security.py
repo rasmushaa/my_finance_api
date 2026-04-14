@@ -1,3 +1,5 @@
+"""Authentication and authorization dependency helpers."""
+
 from typing import Any, Dict
 
 from fastapi import Depends, Request
@@ -62,8 +64,8 @@ def require_role(role: str):
 
     Returns
     -------
-    function
-        A dependency function that can be used with FastAPI's Depends to enforce role-based access control on endpoints.
+    callable
+        FastAPI dependency function enforcing a specific role.
     """
 
     def _checker(payload: dict = Depends(require_user)) -> dict:

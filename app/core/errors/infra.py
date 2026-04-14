@@ -1,3 +1,5 @@
+"""Infrastructure-layer exception types."""
+
 from .base_error import AppError, ErrorCode
 
 

@@ -1,8 +1,12 @@
+"""Authentication and authorization error types."""
+
 from .base_error import AppError, ErrorCode
 
 
 # -- Auth chain -------------------------------------------
 class MissingBearerTokenError(AppError):
+    """Raised when Authorization header is missing."""
+
     def __init__(self):
         super().__init__(
             status_code=401,
@@ -15,6 +19,8 @@ class MissingBearerTokenError(AppError):
 
 
 class CodeExchangeError(AppError):
+    """Raised when Google OAuth authorization code exchange fails."""
+
     def __init__(self):
         super().__init__(
             status_code=401,
@@ -24,6 +30,8 @@ class CodeExchangeError(AppError):
 
 
 class MissingIdTokenError(AppError):
+    """Raised when Google token exchange payload has no ID token."""
+
     def __init__(self):
         super().__init__(
             status_code=401,
@@ -33,6 +41,8 @@ class MissingIdTokenError(AppError):
 
 
 class InvalidIdTokenError(AppError):
+    """Raised when Google ID token is invalid."""
+
     def __init__(self):
         super().__init__(
             status_code=401,
@@ -42,6 +52,8 @@ class InvalidIdTokenError(AppError):
 
 
 class MissingEmailError(AppError):
+    """Raised when verified Google ID token does not include an email."""
+
     def __init__(self):
         super().__init__(
             status_code=401,
@@ -51,6 +63,8 @@ class MissingEmailError(AppError):
 
 
 class UserNotFoundError(AppError):
+    """Raised when authenticated Google user is not provisioned in credentials table."""
+
     def __init__(self):
         super().__init__(
             status_code=404,
@@ -63,6 +77,8 @@ class UserNotFoundError(AppError):
 
 
 class UserNotAuthorizedError(AppError):
+    """Raised when authenticated user role does not satisfy endpoint requirements."""
+
     def __init__(self):
         super().__init__(
             status_code=403,
@@ -76,6 +92,8 @@ class UserNotAuthorizedError(AppError):
 
 # -- Active in usage errors -------------------------------------------
 class ExpiredIdTokenError(AppError):
+    """Raised when JWT token has expired."""
+
     def __init__(self):
         super().__init__(
             status_code=401,
@@ -88,6 +106,8 @@ class ExpiredIdTokenError(AppError):
 
 
 class AuthRateLimitExceededError(AppError):
+    """Raised when user exceeds authentication rate-limit window."""
+
     def __init__(self, email: str, cooldown_seconds: int, details: dict | None = None):
         super().__init__(
             status_code=429,
