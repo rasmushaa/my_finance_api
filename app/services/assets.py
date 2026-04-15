@@ -16,7 +16,7 @@ class AssetService:
         "CASH": "cash",
         "OTHER-ASSETS": "other_assets",
         "APARTMENT": "apartment",
-        "CAPITAL-ASSETS-VALUE": "capital_assets_value",
+        "CAPITAL-ASSETS-PURCHASE-PRICE": "capital_assets_purchase_price",
         "UNREALIZED-CAPITAL-GAINS": "capital_assets_unrealized_gains",
         "MORTGAGE": "mortgage",
         "OTHER-LOANS": "other_liabilities",
@@ -40,7 +40,7 @@ class AssetService:
         cash: float,
         other_assets: float,
         apartment: float,
-        capital_assets_value: float,
+        capital_assets_market_value: float,
         capital_assets_unrealized_gains: float,
         mortgage: float,
         other_liabilities: float,
@@ -63,7 +63,7 @@ class AssetService:
             The sum of all other assets (e.g. cars, valuables)
         apartment: float
             The current market value of the user's apartment or house
-        capital_assets_value: float
+        capital_assets_market_value: float
             The current market value of the user's capital assets (e.g. stocks, crypto)
         capital_assets_unrealized_gains: float
             The unrealized gains of the user's capital assets
@@ -82,11 +82,16 @@ class AssetService:
         date : str
             Snapshot date in ``YYYY-MM-DD`` format.
         """
+
+        captital_assets_purchase_price = (  # The legacy tabel uses purchase price, which can be derived from market value and unrealized gains
+            capital_assets_market_value - capital_assets_unrealized_gains
+        )
+
         field_values = {
             "cash": cash,
             "other_assets": other_assets,
             "apartment": apartment,
-            "capital_assets_value": capital_assets_value,
+            "capital_assets_purchase_price": captital_assets_purchase_price,
             "capital_assets_unrealized_gains": capital_assets_unrealized_gains,
             "mortgage": mortgage,
             "other_liabilities": other_liabilities,
@@ -154,5 +159,11 @@ class AssetService:
         date_str = df["Date"].iloc[0].isoformat()
         values = (
             df.set_index("Category")["Value"].rename(self._CATEGORY_FIELDS).to_dict()
+        )
+        values[
+            "capital_assets_market_value"
+        ] = (  # The frontend used the more fluent market value, compared to the legacy table
+            values["capital_assets_purchase_price"]
+            + values["capital_assets_unrealized_gains"]
         )
         return {"date": date_str, **values}
