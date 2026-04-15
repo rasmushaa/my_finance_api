@@ -56,7 +56,7 @@ def test_asset_integration(integration_env):
                 "cash": 1000.0,
                 "other_assets": 500.0,
                 "apartment": 50000.0,
-                "capital_assets_value": 25000.0,
+                "capital_assets_market_value": 25000.0,
                 "capital_assets_unrealized_gains": 5000.0,
                 "mortgage": -120000.0,
                 "student_loan": -12000.0,
@@ -81,6 +81,9 @@ def test_asset_integration(integration_env):
         assert response.status_code == 200, "Failed to get latest asset data"
         latest_asset = response.json()
         assert latest_asset["date"] == "2024-01-31"
+        assert (
+            latest_asset["capital_assets_market_value"] == 25000.0
+        ), "The legacy capital asset purhcase price is not correctly reversed back to market value"
 
 
 @pytest.mark.integration

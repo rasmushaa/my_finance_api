@@ -14,7 +14,7 @@ class AssetEntryRequest(BaseModel):
         Other tangible assets, for example vehicles or valuables.
     apartment : float
         Market value of owned primary apartment/house.
-    capital_assets_value : float
+    capital_assets_market_value : float
         Market value of invested capital assets.
     capital_assets_unrealized_gains : float
         Unrealized gains included in capital asset valuation.
@@ -50,7 +50,7 @@ class AssetEntryRequest(BaseModel):
         examples=[150000.00],
         ge=0.00,
     )
-    capital_assets_value: float = Field(
+    capital_assets_market_value: float = Field(
         ...,
         description="The market value of all capital assets (ie. stocks, mutual funds, if owned)",
         examples=[25000.00],

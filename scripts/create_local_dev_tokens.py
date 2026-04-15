@@ -24,7 +24,7 @@ class MockUserClient:
     def get_user_by_email(self, email):
         users = {
             "user@example.com": {"role": "user"},
-            "rasmus.haapaniemi1@gmail.com": {
+            "admin@example.com": {
                 "role": "admin"
             },  # Local admin identity used by integration tests.
         }
@@ -35,7 +35,7 @@ mock_client = MockUserClient()
 jwt_service = AppJwtService(mock_client)
 
 user_token, user_role = jwt_service.authenticate("user@example.com")
-admin_token, admin_role = jwt_service.authenticate("rasmus.haapaniemi1@gmail.com")
+admin_token, admin_role = jwt_service.authenticate("admin@example.com")
 
 # Check if .env file exists and read existing content
 try:
