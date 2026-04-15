@@ -1,6 +1,6 @@
-from typing import Any, Dict
+"""Shared API error schema."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ErrorResponse(BaseModel):
@@ -9,12 +9,20 @@ class ErrorResponse(BaseModel):
     This model standardizes the format of error responses,
     making it easier for clients to parse and handle errors consistently.
 
-    ## Attributes
-    - **code** (str): A machine-readable error code that can be used for programmatic error handling by clients.
-    - **message** (str): A human-readable error message describing the issue.
-    - **details** (Dict[str, Any]): Additional details about the error (e.g., validation errors, stack trace) that can be included in the response for debugging purposes.
+    Attributes
+    ----------
+    code : str
+        Machine-readable error code for client-side branching.
+    message : str
+        Human-readable summary of the error.
+    details : dict
+        Optional structured metadata; includes ``hint`` when available.
     """
 
     code: str = "UNKNOWN_ERROR"
     message: str = "An unknown error occurred."
-    details: Dict[str, Any]
+    details: dict = Field(
+        default_factory=dict,
+        description="Structured details about the error, always containing a `hint` field (may be None).",
+        examples=[{"hint": "The 'amount' field must be a positive number."}],
+    )

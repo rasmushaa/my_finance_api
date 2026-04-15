@@ -1,52 +1,74 @@
+"""Application entrypoint and FastAPI app factory.
+
+This module wires lifecycle hooks, router registration, and global exception handling.
+"""
+
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.routers import routers
+from app.api.v1 import router as v1_router
 from app.core.container import (
     get_services_requiring_shutdown,
     get_services_requiring_startup,
 )
-from app.core.exceptions.base import AppError
-from app.core.handlers import app_error_handler
+from app.core.errors.base_error import AppError
+from app.core.errors.handlers import app_error_handler
 from app.core.setup_logging import setup_logging
 
-setup_logging(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------- Lifespan ---------------------------
-def lifespan(app: FastAPI):
-    logger.info("Starting up application...")
+def create_app() -> FastAPI:
+    """Build and configure the FastAPI application instance.
 
-    # Get services that need startup tasks from container
-    startup_services = get_services_requiring_startup()
+    The factory configures:
+    - logging setup
+    - startup lifecycle loading of services that expose ``load()``
+    - shutdown lifecycle cleanup for services that expose ``cleanup()``
+    - v1 router registration
+    - global ``AppError`` exception handling
 
-    # Run startup tasks
-    # Note: this used to be async thredads, but Cloud Run (with request based billing) does not process background threads.
-    # The Cloud Run has 4min maximum startup time, so all startup tasks must be completed within that time frame.
-    for service in startup_services:
-        if hasattr(service, "load"):  # Protocol check for load method
-            logger.info(f"Loading {service.__class__.__name__}")
-            service.load()
+    Returns
+    -------
+    FastAPI
+        Fully configured FastAPI application.
+    """
+    setup_logging(level=logging.INFO)
 
-    yield
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        """Application lifecycle context manager."""
+        logger.info("Starting up application...")
 
-    # Cleanup on shutdown
-    logger.info("Shutting down application...")
-    shutdown_services = get_services_requiring_shutdown()
-    for shutdown_service in shutdown_services:
-        if hasattr(shutdown_service, "cleanup"):
-            logger.info(f"Cleaning up {shutdown_service.__class__.__name__}")
-            shutdown_service.cleanup()
+        # Resolve startup-capable services from container.
+        startup_services = get_services_requiring_startup()
+
+        # Run startup tasks synchronously.
+        # Cloud Run request-based billing does not guarantee background thread progress
+        # while idle, so loading is done during startup to make model availability explicit.
+        for service in startup_services:
+            if hasattr(service, "load"):
+                logger.info(f"Loading {service.__class__.__name__}")
+                service.load()
+
+        try:
+            yield
+        finally:
+            # Run shutdown cleanup hooks when present.
+            logger.info("Shutting down application...")
+            shutdown_services = get_services_requiring_shutdown()
+            for shutdown_service in shutdown_services:
+                if hasattr(shutdown_service, "cleanup"):
+                    logger.info(f"Cleaning up {shutdown_service.__class__.__name__}")
+                    shutdown_service.cleanup()
+
+    application = FastAPI(title="MyFinance ML API", lifespan=lifespan)
+    application.include_router(v1_router)
+    application.add_exception_handler(AppError, app_error_handler)
+    return application
 
 
-# ---------------------------- Application ---------------------------
-app = FastAPI(title="MyFinance ML API", lifespan=lifespan)
-
-# Include all routers from the API router module
-for router in routers:
-    app.include_router(router)
-
-# The main error handler
-app.add_exception_handler(AppError, app_error_handler)
+# -- Application ---------------------------------------------
+app = create_app()

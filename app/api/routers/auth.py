@@ -2,15 +2,8 @@ import logging
 
 from fastapi import APIRouter, Depends
 
-from app.api.dependencies.providers import get_google_oauth_service, get_jwt_service
-from app.core.exceptions.auth import (
-    AuthRateLimitExceededError,
-    CodeExchangeError,
-    InvalidIdTokenError,
-    MissingEmailError,
-    MissingIdTokenError,
-    UserNotFoundError,
-)
+from app.api.dependencies import get_google_oauth_service, get_jwt_service
+from app.core.errors.auth import AuthRateLimitExceededError
 from app.core.rate_limiter import EmailRateLimiter
 from app.schemas.auth import GoogleCodeExchangeRequest, GoogleCodeExchangeResponse
 from app.services.google_oauth import GoogleOAuthService
@@ -18,19 +11,10 @@ from app.services.jwt import AppJwtService as JWTService
 
 logger = logging.getLogger(__name__)
 
-# Map all auth related failures to hide specific details from potential attackers
-AUTH_FAILURE_EXCEPTIONS = (
-    CodeExchangeError,
-    MissingIdTokenError,
-    InvalidIdTokenError,
-    MissingEmailError,
-    UserNotFoundError,
-)
-
 # User can try to log once to prevent spam to database, but this is still enough for legitimate users
 _auth_limiter = EmailRateLimiter(max_requests=1, window_seconds=60)
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/google/code", response_model=GoogleCodeExchangeResponse)
@@ -42,8 +26,8 @@ def auth_google_code(
     """Exchange a Google authorization code for an access token and user info.
 
     This endpoint accepts a Google authorization code obtained from the client-side
-    OAuth flow. It uses the GoogleOAuthService to exchange the code for an access token,
-    retrieves the user's profile information, and returns a minted JWT for authentication in the application.
+    OAuth flow. It uses `GoogleOAuthService` to exchange the code for a Google ID token,
+    validates issuer and required claims, then returns a signed application JWT.
 
     Rate limited by email (from Google's verified ID token) instead of by IP,
     since the Streamlit frontend proxies all requests through a single Cloud Run IP.
@@ -58,31 +42,27 @@ def auth_google_code(
 
     ## Raises
     - **AuthRateLimitExceededError**: If the email has exceeded the rate limit (429).
-    - **CodeExchangeError**: For any possible failure during the code exchange process,
-        including invalid code, token exchange failure, or user not found.
+    - **CodeExchangeError**: If Google code exchange fails.
+    - **MissingIdTokenError**: If Google token payload does not include `id_token`.
+    - **InvalidIdTokenError**: If ID token verification fails.
+    - **MissingEmailError**: If verified token does not include an email claim.
+    - **UserNotFoundError**: If email is not provisioned in API credentials table.
     """
-    try:
-        info = google_oauth_service.exchange_code_for_id_token(
-            request.code, request.redirect_uri
+    info = google_oauth_service.exchange_code_for_id_token(
+        request.code, request.redirect_uri
+    )
+
+    email = info["email"]  # Rate limit by validated google email
+    if not _auth_limiter.check(email):
+        raise AuthRateLimitExceededError(
+            email=email, cooldown_seconds=_auth_limiter.window_seconds
         )
 
-        email = info["email"]  # Rate limit by validated google email
-        if not _auth_limiter.check(email):
-            logger.warning(f"Auth rate limit exceeded for email: {email}")
-            raise AuthRateLimitExceededError(
-                cooldown_seconds=_auth_limiter.window_seconds
-            )
-
-        jwt_token = jwt_service.authenticate(email=email)
-
-    except (
-        AUTH_FAILURE_EXCEPTIONS
-    ):  # Hide specific failure reasons to prevent information leakage
-        raise CodeExchangeError()
+    token, role = jwt_service.authenticate(email=email)
 
     return GoogleCodeExchangeResponse(
-        encoded_token=jwt_token,
-        token_type="Bearer",
+        encoded_jwt_token=token,
         user_name=info.get("name", ""),
         user_picture_url=info.get("picture", ""),
+        user_role=role,
     )

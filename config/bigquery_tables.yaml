@@ -1,0 +1,199 @@
+tables:
+  d_credentials:
+    columns:
+      - name: UserEmail
+        type: STRING
+        mode: REQUIRED
+        description: Google account (OAuth2) email of the user
+      - name: UserRole
+        type: STRING
+        mode: REQUIRED
+        description: Role of the user within the application (admin, user)
+      - name: _RowStatus
+        type: STRING
+        mode: REQUIRED
+        description: Status of the row (i=inserted, u=updated, d=deleted)
+      - name: _RowCreatedAt
+        type: TIMESTAMP
+        mode: REQUIRED
+        description: Timestamp when the row was first created
+      - name: _RowUpdatedAt
+        type: TIMESTAMP
+        mode: NULLABLE
+        description: Timestamp when the row was last updated
+      - name: _RowUploadHash
+        type: INT64
+        mode: NULLABLE
+        description: 64-bit hash of the row data (including metadata cols) for traceability and auditing purposes
+
+  d_filetypes:
+    columns:
+      - name: FileID
+        type: STRING
+        mode: REQUIRED
+        description: Unique id of the file type, generated as a hash of the column names. Used to match incoming files to their corresponding schema for transformation.
+      - name: FileName
+        type: STRING
+        mode: REQUIRED
+        description: Name of the file type
+      - name: DateColumn
+        type: STRING
+        mode: REQUIRED
+        description: Name of the column containing the date
+      - name: DateColumnFormat
+        type: STRING
+        mode: REQUIRED
+        description: Format of the date column, i.e. how to parse the date values, e.g. %Y-%m-%d
+      - name: AmountColumn
+        type: STRING
+        mode: REQUIRED
+        description: Name of the column containing the amount
+      - name: ReceiverColumn
+        type: STRING
+        mode: REQUIRED
+        description: Name of the column containing the receiver
+      - name: _RowStatus
+        type: STRING
+        mode: REQUIRED
+        description: Status of the row (i=inserted, u=updated, d=deleted)
+      - name: _RowCreatedAt
+        type: TIMESTAMP
+        mode: REQUIRED
+        description: Timestamp when the row was first created
+      - name: _RowUpdatedAt
+        type: TIMESTAMP
+        mode: NULLABLE
+        description: Timestamp when the row was last updated
+      - name: _RowUploadHash
+        type: INT64
+        mode: NULLABLE
+        description: 64-bit hash of the row data (including metadata cols) for traceability and auditing purposes
+
+  f_transactions:
+    columns:
+      - name: UserEmail
+        type: STRING
+        mode: REQUIRED
+        description: Google account (OAuth2) email of the user
+      - name: Date
+        type: DATE
+        mode: REQUIRED
+        description: Date of the transaction
+      - name: Amount
+        type: FLOAT
+        mode: REQUIRED
+        description: Amount of the transaction
+      - name: Receiver
+        type: STRING
+        mode: REQUIRED
+        description: Receiver of the transaction
+      - name: Category
+        type: STRING
+        mode: REQUIRED
+        description: Category of the transaction
+      - name: RowProcessingID
+        type: INT64
+        mode: NULLABLE
+        description: 64-bit ID (input features and timestamp) used to link original input rows to model predictions
+      - name: _RowStatus
+        type: STRING
+        mode: REQUIRED
+        description: Status of the row (i=inserted, u=updated, d=deleted)
+      - name: _RowCreatedAt
+        type: TIMESTAMP
+        mode: REQUIRED
+        description: Timestamp when the row was first created
+      - name: _RowUpdatedAt
+        type: TIMESTAMP
+        mode: NULLABLE
+        description: Timestamp when the row was last updated
+      - name: _RowUploadHash
+        type: INT64
+        mode: NULLABLE
+        description: 64-bit hash of the row data (including metadata cols) for traceability and auditing purposes
+
+  f_assets:
+    columns:
+      - name: UserEmail
+        type: STRING
+        mode: REQUIRED
+        description: Google account (OAuth2) email of the user
+      - name: Date
+        type: DATE
+        mode: REQUIRED
+        description: Reporting date of the asset record
+      - name: Category
+        type: STRING
+        mode: REQUIRED
+        description: Category of the asset
+      - name: Value
+        type: FLOAT
+        mode: REQUIRED
+        description: Value of the asset
+      - name: _RowStatus
+        type: STRING
+        mode: REQUIRED
+        description: Status of the row (i=inserted, u=updated, d=deleted)
+      - name: _RowCreatedAt
+        type: TIMESTAMP
+        mode: REQUIRED
+        description: Timestamp when the row was first created
+      - name: _RowUpdatedAt
+        type: TIMESTAMP
+        mode: NULLABLE
+        description: Timestamp when the row was last updated
+      - name: _RowUploadHash
+        type: INT64
+        mode: NULLABLE
+        description: 64-bit hash of the row data (including metadata cols) for traceability and auditing purposes
+
+  f_predictions:
+    columns:
+      - name: PredictedCategory
+        type: STRING
+        mode: REQUIRED
+        description: Predicted category of the transaction
+      - name: ModelName
+        type: STRING
+        mode: REQUIRED
+        description: Name of the model used for prediction
+      - name: ModelAlias
+        type: STRING
+        mode: REQUIRED
+        description: Alias of the model used for prediction
+      - name: ModelVersion
+        type: STRING
+        mode: REQUIRED
+        description: Version of the model used for prediction
+      - name: ModelCommitSHA
+        type: STRING
+        mode: REQUIRED
+        description: Commit SHA of the model used for prediction
+      - name: ModelCommitHeadSHA
+        type: STRING
+        mode: REQUIRED
+        description: Commit head (latest commit before merge) SHA of the model used for prediction
+      - name: ModelArchitecture
+        type: STRING
+        mode: REQUIRED
+        description: Architecture of the model used for prediction
+      - name: RowProcessingID
+        type: INT64
+        mode: NULLABLE
+        description: 64-bit ID (input features and timestamp) used to link original input rows to model predictions
+      - name: _RowStatus
+        type: STRING
+        mode: REQUIRED
+        description: Status of the row (i=inserted, u=updated, d=deleted)
+      - name: _RowCreatedAt
+        type: TIMESTAMP
+        mode: REQUIRED
+        description: Timestamp when the row was first created
+      - name: _RowUpdatedAt
+        type: TIMESTAMP
+        mode: NULLABLE
+        description: Timestamp when the row was last updated
+      - name: _RowUploadHash
+        type: INT64
+        mode: NULLABLE
+        description: 64-bit hash of the row data (including metadata cols) for traceability and auditing purposes

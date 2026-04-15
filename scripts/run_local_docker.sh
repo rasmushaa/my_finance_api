@@ -3,6 +3,10 @@
 # Script to test Docker build locally before CI/CD deployment
 # This mimics the build process used in GitHub Actions
 
+# Refresh local dev tokens in .env
+echo "Refreshing local dev tokens..."
+uv run python scripts/create_local_dev_tokens.py
+
 set -euo pipefail
 
 # Colors for output

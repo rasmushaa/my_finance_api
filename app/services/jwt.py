@@ -1,71 +1,55 @@
+"""JWT authentication service."""
+
 import logging
-import os
 import time
-from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, Tuple
 
 from jose import jwt
 
-from app.core.exceptions.auth import InvalidIdTokenError, UserNotFoundError
+from app.core.errors.auth import (
+    ExpiredIdTokenError,
+    InvalidIdTokenError,
+    UserNotFoundError,
+)
+from app.core.settings import JWTConfig
 
 logger = logging.getLogger(__name__)
 
 
 class UserClientProtocol(Protocol):
-    def get_user_by_email(self, email: str) -> dict:
-        """Protocol method to get user by email.
+    """Protocol for user lookup dependencies used by JWT service."""
 
-        Should be implemented by the actual user client.
-        """
+    def get_user_by_email(self, email: str) -> dict:
+        """Return user record for provided email, or empty dict when missing."""
         ...
 
 
-@dataclass(frozen=True)
-class JWTConfig:
-    """Readonly configuration for JWT operations."""
-
-    algorithm: str = "HS256"
-
-    @property
-    def secret(self) -> str:
-        """Get JWT secret from environment variable."""
-        return os.environ["APP_JWT_SECRET"]
-
-    @property
-    def token_expire_minutes(self) -> int:
-        """Get JWT expiration time from environment variable.
-
-        Details
-        -------
-        Using the key method mandates to have placed the variable at runtime,
-        which does not allow to run profcution with default values.
-        However, this requieres to inlclude the variables in every test module,
-        which may not even use the JWT service directly,
-        but only through the security dependencies.
-        """
-        return int(os.environ["APP_JWT_EXP_DELTA_MINUTES"])
-
-
 class AppJwtService:
-    def __init__(self, user_client: UserClientProtocol):
+    """Issue and validate application JWT tokens."""
+
+    def __init__(
+        self,
+        user_client: UserClientProtocol,
+        config: JWTConfig | None = None,
+    ):
         """Initialize the JWT service.
 
-        Attributes
+        Parameters
         ----------
         user_client : UserClientProtocol
-            A client that implements the UserClientProtocol for fetching user data.
-        __config : JWTConfig
-            The configuration object containing JWT settings.
+            Dependency used to resolve user role by email.
+        config : JWTConfig | None
+            Runtime JWT configuration. Loaded from env when omitted.
         """
         self.user_client = user_client
-        self.__config = JWTConfig()
+        self.__config = config or JWTConfig.from_env()
 
     @property
     def config(self) -> JWTConfig:
         """Public property to access JWT configuration."""
         return self.__config
 
-    def authenticate(self, email: str) -> str:
+    def authenticate(self, email: str) -> Tuple[str, str]:
         """Authenticate user and issue app JWT.
 
         The email is matched against the user database.
@@ -78,13 +62,15 @@ class AppJwtService:
 
         Returns
         -------
-        str
-            A JWT token as a string if authentication is successful.
+        Tuple[str, str]
+            Tuple of encoded token and resolved role.
         """
         user = self.user_client.get_user_by_email(email)
         if not user:
             raise UserNotFoundError()
-        return self.__issue_app_jwt(email=email, role=user["role"])
+
+        token = self.__issue_app_jwt(email=email, role=user["role"])
+        return token, user["role"]
 
     def decode_jwt(self, token: str) -> dict:
         """Decode a JWT token and return its payload.
@@ -108,7 +94,11 @@ class AppJwtService:
                 issuer="my-finance-api",
             )
             return payload
-        except jwt.JWTError as e:
+
+        except jwt.ExpiredSignatureError:
+            raise ExpiredIdTokenError()
+
+        except jwt.JWTError:
             raise InvalidIdTokenError()
 
     def __issue_app_jwt(self, email: str, role: str) -> str:

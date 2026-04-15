@@ -21,65 +21,9 @@ load_env() {
 # Load environment variables
 load_env
 
-# Generate auth tokens for testing
-echo ""
-echo "=== Generated Auth Tokens ==="
-
-# Generate user token
-echo ""
-echo "User Token (role: user):"
-uv run python -c "
-import sys
-sys.path.append('.')
-
-# Mock user client for token generation
-class MockUserClient:
-    def get_user_by_email(self, email):
-        users = {
-            'user@example.com': {'role': 'user'},
-            'admin@example.com': {'role': 'admin'}
-        }
-        return users.get(email)
-
-from app.services.jwt import AppJwtService
-
-mock_client = MockUserClient()
-jwt_service = AppJwtService(mock_client)
-
-user_token = jwt_service.authenticate('user@example.com')
-print(user_token)
-"
-
-# Generate admin token
-echo ""
-echo "Admin Token (role: admin):"
-uv run python -c "
-import sys
-sys.path.append('.')
-
-# Mock user client for token generation
-class MockUserClient:
-    def get_user_by_email(self, email):
-        users = {
-            'user@example.com': {'role': 'user'},
-            'admin@example.com': {'role': 'admin'}
-        }
-        return users.get(email)
-
-from app.services.jwt import AppJwtService
-
-mock_client = MockUserClient()
-jwt_service = AppJwtService(mock_client)
-
-admin_token = jwt_service.authenticate('admin@example.com')
-print(admin_token)
-"
-
-echo ""
-echo "=== Tokens generated successfully! ==="
-echo "Copy the tokens above to use in your API requests."
-echo "Add them to your request headers as: Authorization: Bearer <token>"
-echo ""
+# Refresh local dev tokens in .env
+echo "Refreshing local dev tokens..."
+uv run python scripts/create_local_dev_tokens.py
 
 # Run the FastAPI application using Uvicorn
 echo "Starting FastAPI application with Uvicorn..."

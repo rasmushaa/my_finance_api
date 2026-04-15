@@ -32,15 +32,14 @@
 #   GCP_DEPLOY_SA                  - Service account email for deployment
 #   GCP_MY_FINANCE_API_SA          - Service account email for the Cloud Run service
 #   GCP_BQ_DATASET                 - BigQuery dataset name for the application
+#   GCP_BUCKET_NAME                - GCS bucket name for model artifacts and manifest
 #
 # Application Configuration:
 #   APP_JWT_SECRET                 - JWT signing secret for authentication
 #   APP_JWT_EXP_DELTA_MINUTES      - JWT token expiration time in minutes
+# Environment Variables:
+# ENV                              - Application environment (prod, stg, dev)
 #
-# MLflow Integration (for model artifacts):
-#   MLFLOW_TRACKING_URI            - MLflow server URL
-#   MLFLOW_TRACKING_USERNAME       - MLflow server username
-#   MLFLOW_TRACKING_PASSWORD       - MLflow server password
 #
 name: Deploy to Cloud Run
 
@@ -110,6 +109,7 @@ jobs:
         GCP_PROJECT_ID: "${{ secrets.GCP_PROJECT_ID }}"
         GCP_LOCATION: "${{ secrets.GCP_LOCATION }}"
         GCP_BQ_DATASET: "${{ secrets.GCP_BQ_DATASET }}"
+        GCP_BUCKET_NAME: "${{ secrets.GCP_BUCKET_NAME }}"
         ENV: "${{ env.ENV }}"
         EOF
 
@@ -126,19 +126,10 @@ jobs:
         python --version
         uv pip list
 
-    - name: Run tests
+    - name: Run unit tests (skip integration tests)
       run: |
         export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-        uv run pytest
-
-    - name: Load model artifacts
-      if: env.SHOULD_DEPLOY == 'true'
-      run: |
-        export MLFLOW_TRACKING_URI="${{ secrets.MLFLOW_TRACKING_URI }}"
-        export MLFLOW_TRACKING_USERNAME="${{ secrets.MLFLOW_TRACKING_USERNAME }}"
-        export MLFLOW_TRACKING_PASSWORD="${{ secrets.MLFLOW_TRACKING_PASSWORD }}"
-        export ENV="${{ env.ENV }}"
-        uv run python scripts/load_model_artifacts.py
+        uv run pytest -m "not integration"
 
     - name: Build and Push Docker image
       if: env.SHOULD_DEPLOY == 'true'
@@ -158,7 +149,7 @@ jobs:
 
         docker push "${{ env.IMAGE_URI }}"
 
-    - name: Deploy Cloud Run Job
+    - name: Deploy Cloud Run Service
       if: env.SHOULD_DEPLOY == 'true'
       run: |
         gcloud run deploy my-finance-api-${{ env.ENV }} \

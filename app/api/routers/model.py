@@ -1,43 +1,16 @@
-"""ML model endpoint router module.
-
-This module defines the API router for ML model endpoints, which are used to interact
-with and retrieve information about the machine learning model.
-"""
+"""Administrative endpoints for model metadata, manifest, and reload."""
 
 from fastapi import APIRouter, Depends
 
-from app.api.dependencies.providers import (
-    get_model_store,
-    get_require_admin,
-    get_require_user,
-)
+from app.api.dependencies import get_model_store, get_require_admin
 from app.schemas.error import ErrorResponse
-from app.schemas.model import ModelMetadataResponse, PredictRequest, PredictResponse
+from app.schemas.model import ModelMetadataResponse
 from app.services.model import ModelService
 
-router = APIRouter(prefix="/model", tags=["model"])
+router = APIRouter(prefix="/model", tags=["ML Model Endpoints"])
 
 
-@router.post(
-    "/predict",
-    response_model=PredictResponse,
-    responses={
-        400: {
-            "model": ErrorResponse,
-            "description": "Bad Request - Invalid input features",
-        },
-    },
-)
-def predict(
-    request: PredictRequest,
-    payload: dict = Depends(get_require_user),
-    store: ModelService = Depends(get_model_store),
-):
-    df = request.to_dataframe()
-    preds = store.predict(df)
-    return PredictResponse(predictions=preds)
-
-
+# -- Model Metadata Endpoint ----------------------------------------------------------------------
 @router.get(
     "/metadata",
     response_model=ModelMetadataResponse,
@@ -49,7 +22,86 @@ def predict(
     },
 )
 def get_model_metadata(
-    payload: dict = Depends(get_require_admin),
+    user: dict = Depends(get_require_admin),
     store: ModelService = Depends(get_model_store),
 ):
+    """Return metadata for currently loaded champion and challenger models.
+
+    ## Parameters
+    - **user** (`dict`): Authenticated admin payload.
+    - **store** (`ModelService`): Model service providing metadata.
+
+    ## Returns
+    - **ModelMetadataResponse**: Model versioning and provenance metadata.
+    """
     return ModelMetadataResponse(**store.metadata)
+
+
+# -- Model Manifest Endpoint ----------------------------------------------------------------------
+@router.get(
+    "/manifest",
+    response_model=dict,
+    responses={
+        403: {
+            "model": ErrorResponse,
+            "description": "Forbidden - Requires admin role",
+        },
+    },
+)
+def get_model_manifest(
+    user: dict = Depends(get_require_admin),
+    store: ModelService = Depends(get_model_store),
+):
+    """Return the manifest of the currently loaded ML model.
+
+    ## Parameters
+    - **user** (`dict`): Authenticated admin payload.
+    - **store** (`ModelService`): Model service providing manifest.
+
+    ## Returns
+    - **dict**: Manifest payload loaded from GCS, including active model versions.
+    """
+    return store.manifest
+
+
+# -- Model force reload endpoint ----------------------------------------------------------------------
+@router.post(
+    "/reload",
+    responses={
+        200: {
+            "description": "Model reload process completed",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {"message": {"type": "string"}},
+                        "example": {
+                            "message": "Model reloaded process completed. Note: models may not have updated, if the process failed. Check logs, and metadata endpoint for details."
+                        },
+                    }
+                }
+            },
+        },
+        403: {
+            "model": ErrorResponse,
+            "description": "Forbidden - Requires admin role",
+        },
+    },
+)
+def reload_model(
+    user: dict = Depends(get_require_admin),
+    store: ModelService = Depends(get_model_store),
+):
+    """Force a manifest refresh and model reload from artifact storage.
+
+    ## Parameters
+    - **user** (`dict`): Authenticated admin payload.
+    - **store** (`ModelService`): Model service to perform reload.
+
+    ## Returns
+    - **dict**: Confirmation message after reload attempt.
+    """
+    store.load()  # Force reload the model
+    return {
+        "message": "Model reloaded process completed. Note: models may not have updated, if the process failed. Check logs, and metadata endpoint for details."
+    }
